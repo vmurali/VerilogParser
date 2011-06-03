@@ -1,40 +1,37 @@
 module DataTypes where
 
-data Net = Net
-  { netName::String
-  , netAnnotate::String -- Widths
-  , netTerminal::Bool
+import Data.Map
+import Data.Set
+
+data IrAndConnection = IrAndConnection
+  { ir::Module
+  , terminals::Set String
+  , depends::Map String [String]
+  , influences::Map String [String]
   }
 
 data Module = Module
   { moduleName::String
-  , modulePorts::[String]
+  , modulePorts::String
   , moduleInputs::[Net]
   , moduleOutputs::[Net]
   , moduleWires::[Net]
   , moduleRegs::[Net]
-  , moduleAssigns::[Assign]
-  , moduleCases::[Case]
+  , moduleAssigns::[String]
+  , moduleCases::[String]
   , moduleTasks::[Task]
   , moduleInstances::[Instance]
   }
 
-data Assign = Assign
-  { assignExpr::String
-  , assignLhs::String
-  , assignRhs::[String]
+data Net = Net
+  { netName::String
+  , netWidth::String
   }
 
 data Instance = Instance
   { instanceType::String
   , instanceName::String
   , instancePorts::[(String, String)]
-  }
-
-data Case = Case
-  { caseLhs::String
-  , caseList::[String]
-  , caseStmt::String
   }
 
 type Task = String
