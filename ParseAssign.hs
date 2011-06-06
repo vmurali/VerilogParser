@@ -2,9 +2,9 @@ module ParseAssign(parseAssign) where
 
 import Lexer
 import DataTypes
-import Utils
 import Text.Parsec
 import Data.Char
+import Data.Map
 
 opers c = not (isAlphaNum c || c == '$' || c == '_')
 
@@ -18,4 +18,4 @@ parseAssign = do
   let Right (written:depsList) = runParser (sepBy identifier sep) () "" expr
   state <- getState
   let modIr = ir state
-  putState (addDepends state written depsList){ir = modIr{moduleAssigns = ("  assign " ++ expr ++ ";\n"):moduleAssigns modIr}}
+  putState state{depends = insertWith (++) written depsList $ depends state, ir = modIr{moduleAssigns = ("  assign " ++ expr ++ ";\n"):moduleAssigns modIr}}

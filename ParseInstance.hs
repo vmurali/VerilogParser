@@ -7,13 +7,14 @@ import Data.Set
 
 parseInstance = do
   typ <- identifier
+  param <- optionMaybe (do{reserved "#"; parens (many $ noneOf ")");})
   name <- identifier
   allPorts <- parens $ sepBy parseMatch comma
   semi
   let ports = [ (f, r) | (f, r) <- allPorts, r /= ""]
   state <- getState
   let modIr = ir state
-  let inst = Instance {instanceType = typ, instanceName = name, instancePorts = ports}
+  let inst = Instance {instanceType = typ, instanceParam = param, instanceName = name, instancePorts = ports}
   putState state{ir = modIr{moduleInstances = inst:moduleInstances modIr}}
 
 parseMatch = do

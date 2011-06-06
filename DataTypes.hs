@@ -7,12 +7,11 @@ data IrAndConnection = IrAndConnection
   { ir::Module
   , terminals::Set String
   , depends::Map String [String]
-  , influences::Map String [String]
   }
 
 data Module = Module
   { moduleName::String
-  , modulePorts::String
+  , modulePorts::[String]
   , moduleInputs::[Net]
   , moduleOutputs::[Net]
   , moduleWires::[Net]
@@ -30,6 +29,7 @@ data Net = Net
 
 data Instance = Instance
   { instanceType::String
+  , instanceParam::Maybe String
   , instanceName::String
   , instancePorts::[(String, String)]
   }

@@ -31,6 +31,7 @@ lexer = makeTokenParser emptyDef{
   reservedOpNames = ["@"]
 }
 
+lexeme     = P.lexeme lexer
 whiteSpace = P.whiteSpace lexer
 semi       = P.semi lexer
 comma      = P.comma lexer

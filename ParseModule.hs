@@ -1,4 +1,4 @@
-module ParseModule(parseModule) where
+module ParseModule(parseModule, parseIfdef) where
 
 import Lexer
 import DataTypes
@@ -10,13 +10,15 @@ import Text.Parsec
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
+parseIfdef = lexeme $ string "`ifdef BSV_ASSIGNMENT_DELAY\n`else\n`define BSV_ASSIGNMENT_DELAY\n`endif\n"
+
 parseModule = do
   reserved "module"
   name <- identifier
-  ports <- parens $ many (noneOf ")")
+  ports <- parens $ sepBy comma identifier
   semi
   let emptyModule = undefined
-  putState IrAndConnection{ir = emptyModule{moduleName = name, modulePorts = ports}, terminals = Set.empty, depends = Map.empty, influences = Map.empty}
+  putState IrAndConnection{ir = emptyModule{moduleName = name, modulePorts = ports}, terminals = Set.empty, depends = Map.empty}
   parseStmts
   getState
 
@@ -61,5 +63,7 @@ parseDecls str terminal = do
   names@(terminal:_) <- sepBy identifier comma
   semi
   state <- getState
-  putState state{terminals = Set.insert terminal (terminals state)} -- hack knowing that inputs/outputs will not be a list
+  if terminal /= "CLK" && terminal /= "RST_N"
+    then putState state{terminals = Set.insert terminal (terminals state)} -- hack knowing that inputs/outputs will not be a list
+    else return ()
   return $ map (\n -> Net {netName = n, netWidth = width}) names
