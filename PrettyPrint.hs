@@ -13,12 +13,12 @@ printPorts ports = intercalate ",\n  " $ ports ++ validPorts ++ consumedPorts
 printInputs nets = concatMap (\n -> "  input " ++ netWidth n ++ " " ++ netName n ++ ";\n" ++
                                     if netName n == "CLK" || netName n == "RST_N"
                                       then ""
-                                      else "input " ++ netName n ++ "_valid_;\n output " ++ netName n ++ "_consumed_;\n") nets
+                                      else "  input " ++ netName n ++ "_valid_;\n  output " ++ netName n ++ "_consumed_;\n") nets
 
 printOutputs nets = concatMap (\n -> "  output " ++ netWidth n ++ " " ++ netName n ++ ";\n" ++
                                      if netName n == "CLK" || netName n == "RST_N"
                                        then ""
-                                       else "output " ++ netName n ++ "_valid_;\n input " ++ netName n ++ "_consumed_;\n") nets
+                                       else "  output " ++ netName n ++ "_valid_;\n  input " ++ netName n ++ "_consumed_;\n") nets
 
 printWires nets = concatMap (\n -> "  wire " ++ netWidth n ++ " " ++ netName n ++ ";\n") nets
 
@@ -31,7 +31,7 @@ printConjunction conjus suffix = concatMap (\(w, d) -> "  assign " ++ w ++ suffi
 printInstance inst =
   "  " ++ instanceType inst ++ " " ++ param ++ instanceName inst ++ " (\n    " ++
   (intercalate ",\n    " $ normalConns ++ validConns ++ consumedConns) ++
-  "    );\n"
+  "\n    );\n\n"
  where
   param = case (instanceParam inst) of
             Just x  -> "#(" ++ x ++ ") "
@@ -42,14 +42,15 @@ printInstance inst =
 
 prettyPrint mod terminals allDeps allInfs =
   "`ifdef BSV_ASSIGNMENT_DELAY\n`else\n`define BSV_ASSIGNMENT_DELAY\n`endif\n\n" ++
-  "module " ++ moduleName mod ++ "(\n  " ++ printPorts (modulePorts mod) ++ ");\n" ++
-  printInputs (moduleInputs mod) ++
-  printOutputs (moduleOutputs mod) ++
-  printWires (moduleWires mod) ++
-  printRegs (moduleRegs mod) ++
-  printTerminals terminals ++
+  "module " ++ moduleName mod ++ "(\n  " ++ printPorts (modulePorts mod) ++ "\n);\n\n" ++
+  printInputs (moduleInputs mod) ++ "\n" ++
+  printOutputs (moduleOutputs mod) ++ "\n" ++
+  printWires (moduleWires mod) ++ "\n" ++
+  printRegs (moduleRegs mod) ++ "\n" ++
+  printTerminals terminals ++ "\n" ++
   concatMap printInstance (moduleInstances mod) ++
-  printConjunction allDeps "_valid_" ++
-  printConjunction allInfs "_consumed_" ++
-  concat (moduleAssigns mod) ++
-  concat (moduleCases mod)
+  printConjunction allDeps "_valid_" ++ "\n" ++
+  printConjunction allInfs "_consumed_" ++ "\n" ++
+  concat (moduleAssigns mod) ++ "\n" ++
+  concat (moduleCases mod) ++ "\n" ++
+  "endmodule\n"

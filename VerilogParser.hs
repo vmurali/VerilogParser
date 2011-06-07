@@ -23,4 +23,4 @@ main = do
     Right (IrAndConnection modIr terminals depends) -> do
       let (allDeps, allInfs) = combinational depends terminals
       let str = prettyPrint modIr terminals allDeps allInfs
-      writeFile (outDir ++ removeV file ++ ".multi.v") str
+      writeFile (outDir ++ "/" ++ (removeV file) ++ ".multi.v") str

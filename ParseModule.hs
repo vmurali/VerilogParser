@@ -56,7 +56,10 @@ parseReg = do
 
 parseDecls str isTerminal = do
   try $ reserved str
-  width <- option "" $ brackets (many (noneOf "]"))
+  widthMaybe <- optionMaybe $ brackets (many (noneOf "]"))
+  let width = case widthMaybe of
+                Just x  -> "[" ++ x ++ "]"
+                Nothing -> ""
   names@(terminal:_) <- sepBy identifier comma
   semi
   state <- getState
