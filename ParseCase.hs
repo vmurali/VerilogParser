@@ -17,7 +17,7 @@ parseCase = do
   written <- identifier
   rest <- manyTill anyChar $ try (reserved "endcase")
   reserved "end"
-  let caseStmt = "  always@(" ++ (intercalate " or " depsList) ++ ")\n" ++ "  begin\n" ++ "    case(" ++ switch ++ ")\n      " ++ label1 ++ ":\n" ++ "          " ++ written ++ " " ++ rest ++ "    endcase\n  end\n\n"
+  let caseStmt = "  always@(" ++ (intercalate " or " depsList) ++ ")\n" ++ "  begin\n" ++ "    case(" ++ switch ++ ")\n      " ++ label1 ++ ":\n" ++ "          " ++ written ++ " " ++ rest ++ "endcase\n  end\n\n"
   state <- getState
   let modIr = ir state
   putState state{depends = insertWith (++) written depsList $ depends state, ir = modIr{moduleCases = caseStmt:moduleCases modIr}}

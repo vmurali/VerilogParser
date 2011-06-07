@@ -22,11 +22,11 @@ printOutputs nets = concatMap (\n -> "  output " ++ netWidth n ++ " " ++ netName
 
 printWires nets = concatMap (\n -> "  wire " ++ netWidth n ++ " " ++ netName n ++ ";\n") nets
 
-printRegs nets = concatMap (\n -> "  wire " ++ netWidth n ++ " " ++ netName n ++ ";\n") nets
+printRegs nets = concatMap (\n -> "  reg " ++ netWidth n ++ " " ++ netName n ++ ";\n") nets
 
 printTerminals terminals = concatMap (\w -> "  wire " ++ w ++ "_valid_;\n  wire " ++ w ++ "_consumed_;\n") $ S.elems terminals
 
-printConjunction conjus suffix = concatMap (\(w, d) -> "  assign " ++ w ++ suffix ++ " = " ++ intercalate " && " ("1'b1":d)) conjus
+printConjunction conjus suffix = concatMap (\(w, d) -> "  assign " ++ w ++ suffix ++ " = " ++ (intercalate " && " ("1'b1":(map (\x -> x ++ suffix) d))) ++ ";\n") conjus
 
 printInstance inst =
   "  " ++ instanceType inst ++ " " ++ param ++ instanceName inst ++ " (\n    " ++
@@ -49,8 +49,8 @@ prettyPrint mod terminals allDeps allInfs =
   printRegs (moduleRegs mod) ++ "\n" ++
   printTerminals terminals ++ "\n" ++
   concatMap printInstance (moduleInstances mod) ++
-  printConjunction allDeps "_valid_" ++ "\n" ++
-  printConjunction allInfs "_consumed_" ++ "\n" ++
   concat (moduleAssigns mod) ++ "\n" ++
   concat (moduleCases mod) ++ "\n" ++
+  printConjunction allDeps "_valid_" ++ "\n" ++
+  printConjunction allInfs "_consumed_" ++ "\n" ++
   "endmodule\n"
