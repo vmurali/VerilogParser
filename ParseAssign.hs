@@ -15,7 +15,8 @@ sep = do
 parseAssign = do
   try $ reserved "assign"
   expr <- manyTill anyChar semi
-  let Right (written:depsList) = runParser (sepBy identifier sep) () "" expr
+  --let Right (written:depsList) = runParser (sepBy identifier sep) () "" expr
+  let (written:depsList) = "":[]
   state <- getState
   let modIr = ir state
   putState state{depends = insertWith (++) written depsList $ depends state, ir = modIr{moduleAssigns = ("  assign " ++ expr ++ ";\n"):moduleAssigns modIr}}

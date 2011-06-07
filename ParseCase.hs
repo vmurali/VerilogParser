@@ -9,13 +9,13 @@ import Data.Map
 parseCase = do
   reserved "always"
   reservedOp "@"
-  depsList <- parens $ sepBy identifier (reservedOp "@")
+  depsList <- parens $ sepBy identifier (reserved "or")
   reserved "begin"
   reserved "case"
   switch <- parens $ many (noneOf ")")
-  label1 <- many (noneOf ":")
+  label1 <- manyTill anyChar colon
   written <- identifier
-  rest <- manyTill anyChar $reserved "endcase"
+  rest <- manyTill anyChar $ try (reserved "endcase")
   reserved "end"
   let caseStmt = "  always@" ++ (intercalate " or " depsList) ++ "\n" ++ "  begin\n" ++ "    case(" ++ switch ++ ")\n      " ++ label1 ++ ":\n" ++ "          " ++ written ++ " " ++ rest ++ "    endcase\n  end\n\n"
   state <- getState

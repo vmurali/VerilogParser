@@ -1,7 +1,7 @@
 module Lexer where
 
-import Text.ParserCombinators.Parsec.Language (emptyDef) 
 import Text.ParserCombinators.Parsec
+import Text.ParserCombinators.Parsec.Language
 import Text.ParserCombinators.Parsec.Token as P
 
 lexer = makeTokenParser emptyDef{
@@ -9,8 +9,8 @@ lexer = makeTokenParser emptyDef{
   commentEnd     = "*/",
   commentLine    = "//",
   nestedComments = False,
-  identLetter = alphaNum <|> oneOf "_$",
-  reservedNames = 
+  identLetter    = alphaNum <|> oneOf "_$",
+  reservedNames  = 
     [ "module"
     , "endmodule"
     , "input"
@@ -28,7 +28,7 @@ lexer = makeTokenParser emptyDef{
     , "begin"
     , "end"
     ],
-  reservedOpNames = ["@"]
+  reservedOpNames = ["@", "#"]
 }
 
 lexeme     = P.lexeme lexer

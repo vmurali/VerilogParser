@@ -13,9 +13,8 @@ import qualified Data.Map as Map
 parseModule = do
   reserved "module"
   name <- identifier
-  ports <- parens $ sepBy comma identifier
+  ports <- parens $ sepBy identifier comma
   semi
-  let emptyModule = undefined
   putState IrAndConnection{ir = emptyModule{moduleName = name, modulePorts = ports}, terminals = Set.empty, depends = Map.empty}
   parseStmts
   getState
@@ -55,13 +54,13 @@ parseReg = do
   let modIr = ir state
   putState state{ir = modIr{moduleRegs = moduleRegs modIr ++ regs}}
 
-parseDecls str terminal = do
+parseDecls str isTerminal = do
   try $ reserved str
-  width <- brackets $ many (noneOf "]")
+  width <- option "" $ brackets (many (noneOf "]"))
   names@(terminal:_) <- sepBy identifier comma
   semi
   state <- getState
-  if terminal /= "CLK" && terminal /= "RST_N"
+  if isTerminal && terminal /= "CLK" && terminal /= "RST_N"
     then putState state{terminals = Set.insert terminal (terminals state)} -- hack knowing that inputs/outputs will not be a list
     else return ()
   return $ map (\n -> Net {netName = n, netWidth = width}) names

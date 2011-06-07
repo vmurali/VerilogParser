@@ -1,13 +1,15 @@
 module DataTypes where
 
-import Data.Map
-import Data.Set
+import qualified Data.Map as M
+import qualified Data.Set as S
 
 data IrAndConnection = IrAndConnection
   { ir::Module
-  , terminals::Set String
-  , depends::Map String [String]
+  , terminals::S.Set String
+  , depends::M.Map String [String]
   }
+
+emptyIr = IrAndConnection{ir = emptyModule, terminals = S.empty, depends = M.empty}
 
 data Module = Module
   { moduleName::String
@@ -20,6 +22,19 @@ data Module = Module
   , moduleCases::[String]
   , moduleTasks::[Task]
   , moduleInstances::[Instance]
+  }
+
+emptyModule = Module
+  { moduleName = ""
+  , modulePorts = []
+  , moduleInputs = []
+  , moduleOutputs = []
+  , moduleWires = []
+  , moduleRegs = []
+  , moduleAssigns = []
+  , moduleCases = []
+  , moduleTasks = []
+  , moduleInstances = []
   }
 
 data Net = Net

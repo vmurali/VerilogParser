@@ -2,7 +2,7 @@ module ParseFile(parseFile) where
 
 import Lexer
 import ParseModule
-import Text.Parsec
+import Text.ParserCombinators.Parsec
 
 parseFile = whiteSpace >> parseIfdef >> parseModule
 
