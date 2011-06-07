@@ -1,4 +1,4 @@
-module ParseModule(parseModule, parseIfdef) where
+module ParseModule(parseModule) where
 
 import Lexer
 import DataTypes
@@ -9,8 +9,6 @@ import ParseInstance
 import Text.Parsec
 import qualified Data.Set as Set
 import qualified Data.Map as Map
-
-parseIfdef = lexeme $ string "`ifdef BSV_ASSIGNMENT_DELAY\n`else\n`define BSV_ASSIGNMENT_DELAY\n`endif\n"
 
 parseModule = do
   reserved "module"

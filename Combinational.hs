@@ -1,9 +1,9 @@
 module Combinational(combinational) where
 
 import Data.List
+import Data.Maybe
 import qualified Data.Map as M
 import qualified Data.Set as S
-import Data.Maybe
 
 singleDep depsMap terminals []                  = []
 singleDep depsMap terminals (immDep:immDepRest) 

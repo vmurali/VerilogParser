@@ -1,7 +1,7 @@
 module ParseInstance(parseInstance) where
 
-import Text.Parsec
 import Lexer
+import Text.Parsec
 import DataTypes
 import Data.Set
 
