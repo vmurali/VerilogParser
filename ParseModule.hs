@@ -3,7 +3,7 @@ module ParseModule(parseModule) where
 import Lexer
 import DataTypes
 import ParseAssign
---import ParseTask
+import ParseTask
 import ParseCase
 import ParseInstance
 import Text.Parsec
@@ -19,13 +19,13 @@ parseModule = do
   parseStmts
   getState
 
--- Order of parseStmts matter, especially for parseCase and parseInstance
+-- Order of parseStmts matter, especially for parseInstance
 parseStmts = many $     parseInput
                     <|> parseOutput
                     <|> parseWire
                     <|> parseReg
                     <|> parseAssign
---                    <|> parseTask
+                    <|> parseTask
                     <|> parseCase
                     <|> (try $ reserved "endmodule")
                     <|> parseInstance

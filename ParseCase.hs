@@ -7,9 +7,11 @@ import Data.List
 import Data.Map
 
 parseCase = do
-  reserved "always"
-  reservedOp "@"
-  depsList <- parens $ sepBy identifier (reserved "or")
+  depsList <- try (do
+                     reserved "always"
+                     reservedOp "@"
+                     parens $ sepBy identifier (reserved "or")
+                  )
   reserved "begin"
   reserved "case"
   switch <- parens $ many (noneOf ")")

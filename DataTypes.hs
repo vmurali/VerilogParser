@@ -49,4 +49,7 @@ data Instance = Instance
   , instancePorts::[(String, String)]
   }
 
-type Task = String
+data Task = Task
+  { taskExpr::String
+  , taskStmt::String
+  }

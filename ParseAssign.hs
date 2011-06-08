@@ -7,8 +7,6 @@ import Data.Char
 import Data.Map
 import Data.List
 
-nonId = manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
-
 parseAssign = do
   try $ reserved "assign"
   expr <- manyTill anyChar semi

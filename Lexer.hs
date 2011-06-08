@@ -2,9 +2,9 @@ module Lexer where
 
 import Text.ParserCombinators.Parsec
 import Text.ParserCombinators.Parsec.Language
-import Text.ParserCombinators.Parsec.Token as P
+import qualified Text.ParserCombinators.Parsec.Token as P
 
-lexer = makeTokenParser emptyDef{
+lexer = P.makeTokenParser emptyDef{
   commentStart   = "/*",
   commentEnd     = "*/",
   commentLine    = "//",
@@ -43,3 +43,5 @@ parens     = P.parens lexer
 brackets   = P.brackets lexer
 reserved   = P.reserved lexer    
 reservedOp = P.reservedOp lexer
+
+nonId      = manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)

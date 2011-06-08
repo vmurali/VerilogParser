@@ -1,5 +1,7 @@
 module PrettyPrint(prettyPrint) where
 
+import Lexer
+import Text.Parsec
 import DataTypes
 import Data.List
 import qualified Data.Set as S
@@ -28,6 +30,12 @@ printTerminals terminals = concatMap (\w -> "  wire " ++ w ++ "_valid_;\n  wire 
 
 printConjunction conjus suffix = concatMap (\(w, d) -> "  assign " ++ w ++ suffix ++ " = " ++ (intercalate " && " ("1'b1":(map (\x -> x ++ suffix) d))) ++ ";\n") conjus
 
+printTasks tasks = "// synopsys_translate_off\n  always@(negedge CLK)\n  begin\n    #0;\n" ++ concatMap printTaskStmt tasks ++ "  end\n  //synopsys_translate_on\n"
+ where
+  printTaskStmt (Task expr stmt) = "    if (RST_N)\n      if (" ++ extendedExpr expr ++ ")\n" ++ "        " ++ stmt ++ ");\n"
+  exprList expr = let Right lst = runParser (optional nonId >> sepEndBy identifier nonId) () "" expr in lst
+  extendedExpr expr = expr ++ "\n         " ++ (concatMap (\x -> " && " ++ x ++ "_valid_") $ exprList expr)
+
 printInstance inst =
   "  " ++ instanceType inst ++ " " ++ param ++ instanceName inst ++ " (\n    " ++
   (intercalate ",\n    " $ normalConns ++ validConns ++ consumedConns) ++
@@ -51,6 +59,7 @@ prettyPrint mod terminals allDeps allInfs =
   concatMap printInstance (moduleInstances mod) ++
   concat (moduleAssigns mod) ++ "\n" ++
   concat (moduleCases mod) ++ "\n" ++
+  printTasks (moduleTasks mod) ++ "\n" ++
   printConjunction allDeps "_valid_" ++ "\n" ++
   printConjunction allInfs "_consumed_" ++ "\n" ++
   "endmodule\n"
