@@ -10,6 +10,7 @@ lexer = makeTokenParser emptyDef{
   commentLine    = "//",
   nestedComments = False,
   identLetter    = alphaNum <|> oneOf "_$",
+  identStart     = letter   <|> oneOf "_$",
   reservedNames  = 
     [ "module"
     , "endmodule"

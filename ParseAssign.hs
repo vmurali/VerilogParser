@@ -5,18 +5,14 @@ import DataTypes
 import Text.Parsec
 import Data.Char
 import Data.Map
+import Data.List
 
-opers c = not (isAlphaNum c || c == '$' || c == '_')
-
-sep = do
-  (optional . brackets . many) (noneOf "]")
-  many $ satisfy opers
+nonId = manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
 
 parseAssign = do
   try $ reserved "assign"
   expr <- manyTill anyChar semi
-  --let Right (written:depsList) = runParser (sepBy identifier sep) () "" expr
-  let (written:depsList) = "":[]
+  let Right (written:depsList) = runParser (sepEndBy identifier nonId) () "" expr
   state <- getState
   let modIr = ir state
-  putState state{depends = insertWith (++) written depsList $ depends state, ir = modIr{moduleAssigns = ("  assign " ++ expr ++ ";\n"):moduleAssigns modIr}}
+  putState state{depends = insertWith (++) written (nub depsList) $ depends state, ir = modIr{moduleAssigns = ("  assign " ++ expr ++ ";\n"):moduleAssigns modIr}}
