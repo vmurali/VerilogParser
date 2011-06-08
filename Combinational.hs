@@ -8,7 +8,7 @@ import qualified Data.Set as S
 singleDep depsMap terminals []                  = []
 singleDep depsMap terminals (immDep:immDepRest) 
                     | S.member immDep terminals = immDep:singleDep depsMap terminals immDepRest
-                    | otherwise                 = singleDep depsMap terminals (nub $ immDepRest ++ (fromJust $ M.lookup immDep depsMap))
+                    | otherwise                 = singleDep depsMap terminals (nub $ (fromJust $ M.lookup immDep depsMap) ++ immDepRest)
 
 singleInfluence influences (inPort, deps) = foldl (\influenceMap dep -> M.insertWith (++) dep [inPort] influenceMap) influences deps
 
