@@ -43,13 +43,13 @@ parseOutput = do
   putState state{ir = modIr{moduleOutputs = moduleOutputs modIr ++ outputs}}
 
 parseWire = do
-  wires <- parseDecls "wire" True
+  wires <- parseDecls "wire" False
   state <- getState
   let modIr = ir state
   putState state{ir = (ir state){moduleWires = moduleWires modIr ++ wires}}
 
 parseReg = do
-  regs <- parseDecls "reg" True
+  regs <- parseDecls "reg" False
   state <- getState
   let modIr = ir state
   putState state{ir = modIr{moduleRegs = moduleRegs modIr ++ regs}}
