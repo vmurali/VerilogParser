@@ -2,68 +2,80 @@ module ParseModule(parseModule) where
 
 import Lexer
 import DataTypes
-import ParseAssign
 import ParseTask
 import ParseCase
 import ParseInstance
 import Text.Parsec
-import qualified Data.Set as Set
-import qualified Data.Map as Map
+import Text.Parsec.Prim
 
 parseModule = do
   reserved "module"
   name <- identifier
   ports <- parens $ sepBy identifier comma
   semi
-  putState IrAndConnection{ir = emptyModule{moduleName = name, modulePorts = ports}, terminals = Set.empty, depends = Map.empty}
-  parseStmts
-  getState
+  stmts <- parseStmts
+  return Module
+    { moduleName = name
+    , modulePorts = ports
+    , moduleStmts = stmts
+    }
 
--- Order of parseStmts matter, especially for parseInstance
+-- Order of parseStmts matter
+--   parseCase should be after parseTask and parseInstance must be in the end
 parseStmts = many $     parseInput
                     <|> parseOutput
-                    <|> parseWire
-                    <|> parseReg
+                    <|> parseWires
+                    <|> parseRegs
                     <|> parseAssign
                     <|> parseTask
                     <|> parseCase
-                    <|> (try $ reserved "endmodule")
+                    <|> do{try (reserved "endmodule"); return End}
                     <|> parseInstance
 
 parseInput = do
-  inputs <- parseDecls "input" True
-  state <- getState
-  let modIr = ir state
-  putState state{ir = modIr{moduleInputs = moduleInputs modIr ++ inputs}}
+  width <- parseDeclHeader "input"
+  name <- identifier
+  semi
+  return Input
+    { inputWidth = width
+    , inputName = name
+    }
 
 parseOutput = do
-  outputs <- parseDecls "output" True
-  state <- getState
-  let modIr = ir state
-  putState state{ir = modIr{moduleOutputs = moduleOutputs modIr ++ outputs}}
+  width <- parseDeclHeader "output"
+  name <- identifier
+  semi
+  return Output
+    { outputWidth = width
+    , outputName = name
+    }
 
-parseWire = do
-  wires <- parseDecls "wire" False
-  state <- getState
-  let modIr = ir state
-  putState state{ir = (ir state){moduleWires = moduleWires modIr ++ wires}}
+parseWires = do
+  width <- parseDeclHeader "wire"
+  names <- sepBy identifier comma
+  semi
+  return Wires
+    { wiresWidth = width
+    , wiresNames = names
+    }
 
-parseReg = do
-  regs <- parseDecls "reg" False
-  state <- getState
-  let modIr = ir state
-  putState state{ir = modIr{moduleRegs = moduleRegs modIr ++ regs}}
+parseRegs = do
+  width <- parseDeclHeader "reg"
+  names <- sepBy identifier comma
+  semi
+  return Regs
+    { regsWidth = width
+    , regsNames = names
+    }
 
-parseDecls str isTerminal = do
+parseDeclHeader str = do
   try $ reserved str
   widthMaybe <- optionMaybe $ brackets (many (noneOf "]"))
-  let width = case widthMaybe of
-                Just x  -> "[" ++ x ++ "]"
-                Nothing -> ""
-  names@(terminal:_) <- sepBy identifier comma
-  semi
-  state <- getState
-  if isTerminal && terminal /= "CLK" && terminal /= "RST_N"
-    then putState state{terminals = Set.insert terminal (terminals state)} -- hack knowing that inputs/outputs will not be a list
-    else return ()
-  return $ map (\n -> Net {netName = n, netWidth = width}) names
+  return $ case widthMaybe of
+             Just x  -> "[" ++ x ++ "]"
+             Nothing -> ""
+
+parseAssign = do
+  try $ reserved "assign"
+  expr <- manyTill anyChar semi
+  return $ Assign expr

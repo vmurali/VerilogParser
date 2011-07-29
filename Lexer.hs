@@ -10,7 +10,7 @@ lexer = P.makeTokenParser emptyDef{
   commentLine    = "//",
   nestedComments = False,
   identLetter    = alphaNum <|> oneOf "_$",
-  identStart     = letter   <|> oneOf "_$",
+  identStart     = letter <|> oneOf "_$",
   reservedNames  = 
     [ "module"
     , "endmodule"
@@ -43,5 +43,3 @@ parens     = P.parens lexer
 brackets   = P.brackets lexer
 reserved   = P.reserved lexer    
 reservedOp = P.reservedOp lexer
-
-nonId      = manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)

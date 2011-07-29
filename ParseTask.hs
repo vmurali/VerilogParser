@@ -16,9 +16,7 @@ parseTask = do
   semi
   tasks <- many parseTaskStmt
   reserved "end"
-  state <- getState
-  let modIr = ir state
-  putState state{ir = modIr{moduleTasks = tasks}}
+  return $ TaskStmt tasks
 
 parseTaskStmt = do
   reserved "if"
