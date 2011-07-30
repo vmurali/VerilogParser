@@ -6,7 +6,10 @@ import DataTypes
 
 parseInstance = do
   typ <- identifier
-  param <- option "" (do{reserved "#"; parens (many $ noneOf ")");})
+  paramMaybe <- optionMaybe (do{reserved "#"; parens (many $ noneOf ")");})
+  let param = case paramMaybe of
+                Just x  -> "#(" ++ x ++ ") "
+                Nothing -> " "
   name <- identifier
   allPorts <- parens $ sepBy parseMatch comma
   semi

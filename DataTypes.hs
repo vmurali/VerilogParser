@@ -48,7 +48,7 @@ instance Show Stmt where
   show (Assign expr) = "\n  assign " ++ expr ++ ";\n"
   show (Case str) = "\n  always@" ++ str ++ "    endcase\n  end\n"
   show (TaskStmt tasks) = "\n  always@(negedge CLK)\n  begin\n    #0;\n" ++ (concatMap show tasks) ++ "  end\n"
-  show (Instance t param name ports) = "\n  " ++ t ++ "#(" ++ param ++ ") " ++ name ++ " (" ++ (intercalate ", " $ map printPort ports) ++ ");\n"
+  show (Instance t param name ports) = "\n  " ++ t ++ param ++ name ++ " (" ++ (intercalate ", " $ map printPort ports) ++ ");\n"
   show End = ""
 
 
