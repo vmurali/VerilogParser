@@ -10,7 +10,7 @@ import qualified Data.Map as Map
 
 addTerminal terminalSet (Input _ name) = if name /= "CLK" && name /= "RST_N" then Set.insert name terminalSet else terminalSet
 addTerminal terminalSet (Output _ name) = Set.insert name terminalSet
-addTerminal terminalSet (Instance _ _ _ ports) = foldl (\tSet (f, r) -> if r /= "CLK" && r /= "RST_N" then Set.insert r tSet else tSet) terminalSet ports
+addTerminal terminalSet (Instance _ _ _ ports) = foldl (\tSet (f, r) -> if r /= "" && r /= "CLK" && r /= "RST_N" then Set.insert r tSet else tSet) terminalSet ports
 addTerminal terminalSet _ = terminalSet
 
 addDepends dependsMap (Case str) =
