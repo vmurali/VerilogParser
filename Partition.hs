@@ -24,9 +24,9 @@ getWidths mod = foldl addWidth Map.empty (moduleStmts mod)
 getInstWireWidths mod = Set.fold mapWireWidth Map.empty $ getInstWires mod
  where
   mapWireWidth wire map = Map.insert wire (isWrite wire, (fromJust $ Map.lookup wire (getWidths mod))) map
-  isWrite wire = (isJust $ matchRegex (mkRegex ".*WRITE$") wire) ||
-                 (isJust $ matchRegex (mkRegex ".*WRITE_VALID$") wire) ||
-                 (isJust $ matchRegex (mkRegex ".*READ_CONSUMED$") wire)
+  isWrite wire = (isJust $ matchRegex (mkRegex ".*READ$") wire) ||
+                 (isJust $ matchRegex (mkRegex ".*READ_VALID$") wire) ||
+                 (isJust $ matchRegex (mkRegex ".*WRITE_CONSUMED$") wire)
 
 getLogic mod@(Module name ports stmts) = Module
   { moduleName = name ++ "_logic_"
