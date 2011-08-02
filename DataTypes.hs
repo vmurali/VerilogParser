@@ -29,13 +29,13 @@ data Stmt =
     }
   | Assign String
   | Case String
-  | TaskStmt [Task]
   | Instance
     { instanceType::String
     , instanceParam::String
     , instanceName::String
     , instancePorts::[(String, String)]
     }
+  | TaskStmt [Task]
   | End
 
 printPort (formal, real) = "." ++ formal ++ "(" ++ real ++ ")"
@@ -47,8 +47,8 @@ instance Show Stmt where
   show (Regs width names) = "  reg " ++ width ++ " " ++ (intercalate ", " names) ++ ";\n"
   show (Assign expr) = "\n  assign " ++ expr ++ ";\n"
   show (Case str) = "\n  always@" ++ str ++ "    endcase\n  end\n"
+  show (Instance t param name ports) = "\n  " ++ t ++ param ++ name ++ " (\n    " ++ (intercalate ",\n    " $ map printPort ports) ++ ");\n"
   show (TaskStmt tasks) = "\n  always@(negedge CLK)\n  begin\n    #0;\n" ++ (concatMap show tasks) ++ "  end\n"
-  show (Instance t param name ports) = "\n  " ++ t ++ param ++ name ++ " (" ++ (intercalate ", " $ map printPort ports) ++ ");\n"
   show End = ""
 
 
@@ -59,8 +59,15 @@ data Module = Module
   }
 
 instance Show Module where
-  show mod =
+  show (Module name ports stmts) =
     "`ifdef BSV_ASSIGNMENT_DELAY\n`else\n`define BSV_ASSIGNMENT_DELAY\n`endif\n\n" ++
-    "module " ++ moduleName mod ++ "(" ++ intercalate ", " (modulePorts mod) ++ ");\n\n" ++
-    concatMap show (moduleStmts mod) ++
+    "module " ++ name ++ "(\n  " ++ intercalate ",\n  " ports ++ ");\n\n" ++
+    concatMap show [x|x@Input{} <- stmts] ++
+    concatMap show [x|x@Output{} <- stmts] ++
+    concatMap show [x|x@Wires{} <- stmts] ++
+    concatMap show [x|x@Regs{} <- stmts] ++
+    concatMap show [x|x@Assign{} <- stmts] ++
+    concatMap show [x|x@Case{} <- stmts] ++
+    concatMap show [x|x@Instance{} <- stmts] ++
+    concatMap show [x|x@TaskStmt{} <- stmts] ++
     "endmodule\n"
