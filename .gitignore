@@ -1,5 +1,6 @@
 build
 build/*
+Normal
 Partitioner
 Multicycle
-VerilogParser
+tests

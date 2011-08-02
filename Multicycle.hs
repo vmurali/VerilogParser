@@ -1,24 +1,78 @@
-import ParseFile
+import VerilogParser
 import DataTypes
-import Options
 import Text.Parsec
-import System.IO
-import System.Environment
-import System.Exit
-import Text.Regex
-import AddControl
+import Lexer
+import Data.List
+import Data.Maybe
+import qualified Data.Set as Set
+import qualified Data.Map as Map
 
-removeV str = subRegex (mkRegex "\\.v$") str ""
+addTerminal terminalSet (Input _ name) = if name /= "CLK" && name /= "RST_N" then Set.insert name terminalSet else terminalSet
+addTerminal terminalSet (Output _ name) = Set.insert name terminalSet
+addTerminal terminalSet (Instance _ _ _ ports) = foldl (\tSet (f, r) -> if r /= "" && r /= "CLK" && r /= "RST_N" then Set.insert r tSet else tSet) terminalSet ports
+addTerminal terminalSet _ = terminalSet
 
-main = do
-  args <- getArgs
-  Options file outDir <- getOpts args
-  contents <- readFile file
-  let parsed = runParser parseFile () file contents
-  case (parsed) of
-    Left err -> do
-      hPutStrLn stderr $ show err
-      exitFailure
-    Right contents ->  do
-      putStrLn $ show (addControl contents)
-      --writeFile (outDir ++ "/" ++ (removeV file) ++ ".multi.v") $ show (addControl contents)
+addDepends dependsMap (Case str) =
+  Map.insert written depList dependsMap
+ where
+  Right (written, depList) = runParser parseCaseHeader () "" str
+  parseCaseHeader = do
+    depList <- sepBy identifier (reserved "or")
+    reserved "begin"
+    reserved "case"
+    switch <- parens $ many (noneOf ")")
+    label1 <- manyTill anyChar colon
+    written <- identifier
+    return (written, depList)
+
+addDepends dependsMap (Assign str) =
+  Map.insert written depList dependsMap
+ where
+  nonId = manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
+  Right (written:depList) = runParser (sepEndBy identifier nonId) () "" str
+    
+addDepends dependsMap _ = dependsMap
+
+writeTerminalDepends terminalSet dependsMap (write, immDeps) =
+  (write, getTerminalDepends immDeps)
+ where
+  getTerminalDepends [] = []
+  getTerminalDepends (immDep:immDeps)
+    | Set.member immDep terminalSet = immDep:(getTerminalDepends immDeps)
+    | otherwise                     = getTerminalDepends $ nub ((fromJust $ Map.lookup immDep dependsMap) ++ immDeps)
+
+terminalDepends terminalSet dependsMap = map (writeTerminalDepends terminalSet dependsMap) writeImmDepends
+ where
+  writeImmDepends = [(write, deps)| (write, deps) <- Map.assocs dependsMap, Set.member write terminalSet]
+
+terminalInfluences terminalSet dependsMap termDeps = foldl getInfluences Map.empty termDeps
+ where
+  getInfluences influencesMap (write, deps) = foldl (\infMap dep -> Map.insertWith (++) dep [write] infMap) influencesMap deps
+
+mapInstances inst@Instance{instancePorts = ports} = inst {instancePorts = ports ++
+                                                                          (map (printPort "_VALID" "")  nonClkRstPorts) ++
+                                                                          (map (printPort "_CONSUMED" "1") nonClkRstPorts)}
+ where
+  printPort suffix dflt (r, f) = (r ++ suffix, if f == "" then "" else f ++ suffix)
+  nonClkRstPorts = delete ("CLK", "CLK") $ delete ("RST_N", "RST_N") ports
+mapInstances x@_ = x
+
+addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ map mapInstances stmts ++ newValids ++ newConsumeds ++ validAssigns ++ consumedAssigns)
+ where
+   terminalSet = foldl addTerminal Set.empty stmts
+   dependsMap = foldl addDepends Map.empty stmts
+   termDepsPartial = terminalDepends terminalSet dependsMap
+   termDeps = termDepsPartial ++ [(write, [])| Output _ write <- stmts, Map.notMember write dependsMap]
+   termInfsPartialMap = terminalInfluences terminalSet dependsMap termDepsPartial
+   termInfs = (Map.assocs termInfsPartialMap) ++ [(read, [])| Input _ read <- stmts, Map.notMember read termInfsPartialMap, read /= "CLK" && read /= "RST_N"]
+   ports = delete "CLK" $ delete "RST_N" allPorts
+   newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ [x ++ "_CONSUMED" | x <- ports]
+   newInputs = [Input "" (x ++ "_VALID")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"] ++ [Output "" (x ++ "_CONSUMED")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
+   newOutputs = [Output "" (x ++ "_VALID")| (Output _ x) <- stmts] ++ [Input "" (x ++ "_CONSUMED")| (Output _ x) <- stmts]
+   mapControl ctrl list = map (\(ctrlHead, ctrlTail) -> Assign (ctrlHead ++ ctrl ++ " = 1" ++ (concatMap (\x -> " && " ++ x ++ ctrl) ctrlTail))) list
+   newValids = map (\(x, _) -> Wires "" [x ++ "_VALID"]) termDeps
+   newConsumeds = map (\(x, _)-> Wires "" [x ++ "_CONSUMED"]) termInfs
+   validAssigns = mapControl "_VALID" termDeps
+   consumedAssigns = mapControl "_CONSUMED" termInfs
+
+main = verilogParser [("_multi_.v", addControl)]

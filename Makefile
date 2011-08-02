@@ -1,9 +1,11 @@
-.PHONY: clean
+.PHONY: clean all
 
 %:
-	ghc --make -outputdir build $*.hs
+	ghc --make -outputdir build $*hs
 
 clean:
-	rm -rf build *.o *.hi build Multicycle VerilogParser Partitioner
+	rm -rf build *.o *.hi build Multicycle Partitioner Normal
 
-.DEFAULT_GOAL := Multicycle
+all: Multicycle. Partitioner. Normal.
+
+.DEFAULT_GOAL := all

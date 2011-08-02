@@ -11,9 +11,8 @@ parseInstance = do
                 Just x  -> "#(" ++ x ++ ") "
                 Nothing -> " "
   name <- identifier
-  allPorts <- parens $ sepBy parseMatch comma
+  ports <- parens $ sepBy parseMatch comma
   semi
-  let ports = [ (f, r) | (f, r) <- allPorts, r /= ""]
   return Instance
     { instanceType = typ
     , instanceParam = param
