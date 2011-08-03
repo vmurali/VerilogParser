@@ -1,6 +1,8 @@
 import VerilogParser
 import DataTypes
 import Text.Parsec
+import qualified Text.ParserCombinators.Parsec.Token as P
+import Text.ParserCombinators.Parsec.Language
 import Lexer
 import Data.List
 import Data.Maybe
@@ -19,7 +21,7 @@ addDepends dependsMap (Case str) =
  where
   Right (written, depList) = runParser parseCaseHeader () "" str
   parseCaseHeader = do
-    depList <- sepBy identifier (reserved "or")
+    depList <- parens $ sepBy identifier (reserved "or")
     reserved "begin"
     reserved "case"
     switch <- parens $ many (noneOf ")")
@@ -37,7 +39,7 @@ addDepends dependsMap _ = dependsMap
 getTerminalDepends terminalSet dependsMap [] = []
 getTerminalDepends terminalSet dependsMap (immDep:immDeps)
   | Set.member immDep terminalSet = immDep:(getTerminalDepends terminalSet dependsMap immDeps)
-  | otherwise                     = getTerminalDepends terminalSet dependsMap $ nub ((fromJust $ Map.lookup immDep dependsMap) ++ immDeps)
+  | otherwise                     = getTerminalDepends terminalSet dependsMap $ nub ((fromMaybe [] $ Map.lookup immDep dependsMap) ++ immDeps)
 
 writeTerminalDepends terminalSet dependsMap (write, immDeps) =
   (write, getTerminalDepends terminalSet dependsMap immDeps)

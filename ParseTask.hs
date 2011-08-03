@@ -19,9 +19,12 @@ parseTask = do
   return $ TaskStmt tasks
 
 parseTaskStmt = do
-  try $ reserved "if"
-  parens $ lexeme $ string "RST_N"
+  parseFirstIf
   parseRealTask
+
+parseFirstIf = optional $ do
+  try $ reserved "if"
+  parens $ lexeme (string "RST_N")
 
 parseIf = optionMaybe $ do
   try $ reserved "if"
