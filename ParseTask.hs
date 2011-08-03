@@ -28,7 +28,8 @@ parseFirstIf = (optional . try) (do
 
 parseIf = optionMaybe $ do
   try $ reserved "if"
-  parens $ many (noneOf ")")
+  char '('
+  manyTill anyChar (lexeme $ char ')')
 
 parseRealTask = do
   expr <- parseIf
