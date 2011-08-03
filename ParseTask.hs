@@ -19,9 +19,15 @@ parseTask = do
   return $ TaskStmt tasks
 
 parseTaskStmt = do
-  reserved "if"
+  try $ reserved "if"
   parens $ lexeme $ string "RST_N"
-  reserved "if"
-  expr <- parens $ many (noneOf ")")
-  stmt <- lexeme $ manyTill anyChar (try $ string ");\n")
-  return Task{taskExpr = expr, taskStmt = stmt}
+  parseRealTask
+
+parseIf = optionMaybe $ do
+  try $ reserved "if"
+  parens $ many (noneOf ")")
+
+parseRealTask = do
+  expr <- parseIf
+  str <- lexeme $ manyTill anyChar (try $ string ";\n")
+  return $ Task expr str

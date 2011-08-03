@@ -7,6 +7,8 @@ import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
+getIds = sepEndBy identifier $ manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
+
 addTerminal terminalSet (Input _ name) = if name /= "CLK" && name /= "RST_N" then Set.insert name terminalSet else terminalSet
 addTerminal terminalSet (Output _ name) = Set.insert name terminalSet
 addTerminal terminalSet (Instance _ _ _ ports) = foldl (\tSet (f, r) -> if r /= "" && r /= "CLK" && r /= "RST_N" then Set.insert r tSet else tSet) terminalSet ports
@@ -28,18 +30,17 @@ addDepends dependsMap (Case str) =
 addDepends dependsMap (Assign str) =
   Map.insert written depList dependsMap
  where
-  nonId = manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
-  Right (written:depList) = runParser (sepEndBy identifier nonId) () "" str
-    
+  Right (written:depList) = runParser getIds () "" str
+
 addDepends dependsMap _ = dependsMap
 
+getTerminalDepends terminalSet dependsMap [] = []
+getTerminalDepends terminalSet dependsMap (immDep:immDeps)
+  | Set.member immDep terminalSet = immDep:(getTerminalDepends terminalSet dependsMap immDeps)
+  | otherwise                     = getTerminalDepends terminalSet dependsMap $ nub ((fromJust $ Map.lookup immDep dependsMap) ++ immDeps)
+
 writeTerminalDepends terminalSet dependsMap (write, immDeps) =
-  (write, getTerminalDepends immDeps)
- where
-  getTerminalDepends [] = []
-  getTerminalDepends (immDep:immDeps)
-    | Set.member immDep terminalSet = immDep:(getTerminalDepends immDeps)
-    | otherwise                     = getTerminalDepends $ nub ((fromJust $ Map.lookup immDep dependsMap) ++ immDeps)
+  (write, getTerminalDepends terminalSet dependsMap immDeps)
 
 terminalDepends terminalSet dependsMap = map (writeTerminalDepends terminalSet dependsMap) writeImmDepends
  where
@@ -57,7 +58,25 @@ mapInstances inst@Instance{instancePorts = ports} = inst {instancePorts = ports 
   nonClkRstPorts = delete ("CLK", "CLK") $ delete ("RST_N", "RST_N") ports
 mapInstances x@_ = x
 
-addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ map mapInstances stmts ++ newValids ++ newConsumeds ++ validAssigns ++ consumedAssigns)
+parseTaskStmtDepends = do
+  lexeme $ char '$'
+  identifier
+  lexeme $ char '('
+  optional $ lexeme (do{char '\"'; manyTill anyChar (char '\"')})
+  comma
+  many anyChar
+
+mapTaskStmt terminalSet dependsMap (Task mayExpr stmt) = Task (Just (fromMaybe "1" mayExpr ++ concatMap (\x -> " && " ++ x ++ "_VALID") getTaskDepends)) stmt
+ where
+  getTaskDepends = {- ["|" ++ stmtDeps ++ "|"] -} getTerminalDepends terminalSet dependsMap deps
+  ifExpr = fromMaybe "" mayExpr
+  Right stmtDeps = runParser parseTaskStmtDepends () "" stmt
+  Right deps = runParser getIds () "" $ stmtDeps ++ " " ++ ifExpr
+
+mapTasks terminalSet dependsMap (TaskStmt xs) = TaskStmt $ map (mapTaskStmt terminalSet dependsMap) xs
+mapTasks _           _          x@_           = x
+
+addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ map (mapInstances . mapTasks terminalSet dependsMap) stmts ++ newValids ++ newConsumeds ++ validAssigns ++ consumedAssigns)
  where
    terminalSet = foldl addTerminal Set.empty stmts
    dependsMap = foldl addDepends Map.empty stmts
@@ -70,8 +89,8 @@ addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ new
    newInputs = [Input "" (x ++ "_VALID")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"] ++ [Output "" (x ++ "_CONSUMED")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
    newOutputs = [Output "" (x ++ "_VALID")| (Output _ x) <- stmts] ++ [Input "" (x ++ "_CONSUMED")| (Output _ x) <- stmts]
    mapControl ctrl list = map (\(ctrlHead, ctrlTail) -> Assign (ctrlHead ++ ctrl ++ " = 1" ++ (concatMap (\x -> " && " ++ x ++ ctrl) ctrlTail))) list
-   newValids = map (\(x, _) -> Wires "" [x ++ "_VALID"]) termDeps
-   newConsumeds = map (\(x, _)-> Wires "" [x ++ "_CONSUMED"]) termInfs
+   newValids = map (\x -> Wires "" [x ++ "_VALID"]) (Set.elems terminalSet)
+   newConsumeds = map (\x -> Wires "" [x ++ "_CONSUMED"]) (Set.elems terminalSet)
    validAssigns = mapControl "_VALID" termDeps
    consumedAssigns = mapControl "_CONSUMED" termInfs
 

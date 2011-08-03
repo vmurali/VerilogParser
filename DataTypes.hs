@@ -3,12 +3,13 @@ module DataTypes where
 import Data.List
 
 data Task = Task
-  { taskExpr::String
+  { taskExpr::Maybe String
   , taskStmt::String
   }
 
 instance Show Task where
-  show (Task expr stmt) = "    if(RST_N)\n      if(" ++ expr ++ ")\n        " ++ stmt ++ ");\n"
+  show (Task Nothing     stmt) = "    if(RST_N)\n      " ++ stmt ++ ";\n"
+  show (Task (Just expr) stmt) = "    if(RST_N)\n      if(" ++ expr ++ ")\n        " ++ stmt ++ ";\n"
 
 data Stmt =
   Input
