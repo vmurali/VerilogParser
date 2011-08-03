@@ -63,8 +63,7 @@ parseTaskStmtDepends = do
   identifier
   lexeme $ char '('
   optional $ lexeme (do{char '\"'; manyTill anyChar (char '\"')})
-  comma
-  many anyChar
+  option "" $ do{comma; many anyChar}
 
 mapTaskStmt terminalSet dependsMap (Task mayExpr stmt) = Task (Just (fromMaybe "1" mayExpr ++ concatMap (\x -> " && " ++ x ++ "_VALID") getTaskDepends)) stmt
  where
