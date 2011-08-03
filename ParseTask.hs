@@ -22,8 +22,8 @@ parseTaskStmt = do
   parseFirstIf
   parseRealTask
 
-parseFirstIf = optional $ do
-  try $ reserved "if"
+parseFirstIf = (optional . try) $ do
+  reserved "if"
   parens $ lexeme (string "RST_N")
 
 parseIf = optionMaybe $ do
