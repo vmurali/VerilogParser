@@ -96,4 +96,4 @@ addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ new
    validAssigns = mapControl "_VALID" termDeps
    consumedAssigns = mapControl "_CONSUMED" termInfs
 
-main = verilogParser [("_multi_.v", addControl)]
+main = verilogParser [("_multi.v", addControl)]

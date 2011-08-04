@@ -54,4 +54,4 @@ getOuter mod@(Module name ports stmts) = mod
     , instancePorts = map (\x -> (x, x)) (Map.keys $ getInstWireWidths mod)
     }
 
-main = verilogParser [("_logic_.v", getLogic), ("_outer_.v", getOuter)]
+main = verilogParser [("_logic.v", getLogic), ("_outer_.v", getOuter)]
