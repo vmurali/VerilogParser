@@ -21,6 +21,7 @@ port Wires;
 endport
 
 
+(* synthesize *)
 partition Wires mkWires;
    Client c <-  mkClient;
    Reg#(Bit#(2)) state <- mkReg(0);
