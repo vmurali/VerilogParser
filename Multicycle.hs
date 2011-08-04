@@ -51,7 +51,7 @@ terminalDepends terminalSet dependsMap = map (writeTerminalDepends terminalSet d
 
 terminalInfluences terminalSet dependsMap termDeps = foldl getInfluences Map.empty termDeps
  where
-  getInfluences influencesMap (write, deps) = foldl (\infMap dep -> Map.insertWith (\_ x -> x) dep [write] infMap) influencesMap deps
+  getInfluences influencesMap (write, deps) = foldl (\infMap dep -> Map.insertWith (++) dep [write] infMap) influencesMap deps
 
 mapInstances inst@Instance{instancePorts = ports} = inst {instancePorts = ports ++
                                                                           (map (printPort "_VALID" "")  nonClkRstPorts) ++
