@@ -51,7 +51,7 @@ terminalDepends terminalSet dependsMap = map (writeTerminalDepends terminalSet d
 
 terminalInfluences terminalSet dependsMap termDeps = foldl getInfluences Map.empty termDeps
  where
-  getInfluences influencesMap (write, deps) = foldl (\infMap dep -> Map.insertWith (++) dep [write] infMap) influencesMap deps
+  getInfluences influencesMap (write, deps) = foldl (\infMap dep -> Map.insertWith (\_ x -> x) dep [write] infMap) influencesMap deps
 
 mapInstances inst@Instance{instancePorts = ports} = inst {instancePorts = ports ++
                                                                           (map (printPort "_VALID" "")  nonClkRstPorts) ++
@@ -79,7 +79,7 @@ mapTaskStmt terminalSet dependsMap x@(Task mayExpr stmt) = Task (Just (fromMaybe
 mapTasks terminalSet dependsMap (TaskStmt xs) = TaskStmt $ map (mapTaskStmt terminalSet dependsMap) xs
 mapTasks _           _          x@_           = x
 
-addTaskDependsInfs terminalSet dependsMap infMap tasks = foldl (\newMap d -> Map.insertWith (++) d [] newMap) infMap $ concatMap (getTaskDepends terminalSet dependsMap) tasks
+addTaskDependsInfs terminalSet dependsMap infMap tasks = foldl (\newMap d -> Map.insertWith (\_ x -> x) d [] newMap) infMap $ concatMap (getTaskDepends terminalSet dependsMap) tasks
 
 addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ map (mapInstances . mapTasks terminalSet dependsMap) stmts ++ newValids ++ newConsumeds ++ validAssigns ++ consumedAssigns)
  where
