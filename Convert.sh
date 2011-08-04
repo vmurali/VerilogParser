@@ -1,6 +1,6 @@
 #!/bin/bash
 
-for file in *.v
+for file in mk*.v
 do
   Multicycle -o multi ${file}
 done
