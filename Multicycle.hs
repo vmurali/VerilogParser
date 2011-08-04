@@ -47,7 +47,7 @@ writeTerminalDepends terminalSet dependsMap (write, immDeps) =
 
 terminalDepends terminalSet dependsMap = map (writeTerminalDepends terminalSet dependsMap) writeImmDepends
  where
-  writeImmDepends = [(write, deps)| (write, deps) <- Map.assocs dependsMap, Set.member write terminalSet]
+  writeImmDepends = [(write, nub deps)| (write, deps) <- Map.assocs dependsMap, Set.member write terminalSet]
 
 terminalInfluences terminalSet dependsMap termDeps = foldl getInfluences Map.empty termDeps
  where
@@ -68,7 +68,7 @@ parseTaskStmtDepends = do
   optional $ lexeme (do{char '\"'; manyTill anyChar (char '\"')})
   option "" $ do{comma; many anyChar}
 
-getTaskDepends terminalSet dependsMap (Task mayExpr stmt) = getTerminalDepends terminalSet dependsMap deps
+getTaskDepends terminalSet dependsMap (Task mayExpr stmt) = getTerminalDepends terminalSet dependsMap $ nub deps
  where
   ifExpr = fromMaybe "" mayExpr
   Right stmtDeps = runParser parseTaskStmtDepends () "" stmt
