@@ -6,8 +6,9 @@ import ParseTask
 import ParseCase
 import ParseInstance
 import Text.Parsec
-import Text.Parsec.Prim
+import Control.Monad.Trans
 
+parseModule:: MonadIO m => ParsecT String u m Module
 parseModule = do
   reserved "module"
   name <- identifier
@@ -22,6 +23,7 @@ parseModule = do
 
 -- Order of parseStmts matter
 --   parseCase should be after parseTask and parseInstance must be in the end
+parseStmts:: MonadIO m => ParsecT String u m [Stmt]
 parseStmts = many $     parseInput
                     <|> parseOutput
                     <|> parseWires
@@ -32,6 +34,7 @@ parseStmts = many $     parseInput
                     <|> do{try (reserved "endmodule"); return End}
                     <|> parseInstance
 
+parseInput:: MonadIO m => ParsecT String u m Stmt
 parseInput = do
   width <- parseDeclHeader "input"
   name <- identifier
@@ -41,6 +44,7 @@ parseInput = do
     , inputName = name
     }
 
+parseOutput:: MonadIO m => ParsecT String u m Stmt
 parseOutput = do
   width <- parseDeclHeader "output"
   name <- identifier
@@ -50,6 +54,7 @@ parseOutput = do
     , outputName = name
     }
 
+parseWires:: MonadIO m => ParsecT String u m Stmt
 parseWires = do
   width <- parseDeclHeader "wire"
   names <- sepBy identifier comma
@@ -59,6 +64,7 @@ parseWires = do
     , wiresNames = names
     }
 
+parseRegs:: MonadIO m => ParsecT String u m Stmt
 parseRegs = do
   width <- parseDeclHeader "reg"
   names <- sepBy identifier comma
@@ -68,6 +74,7 @@ parseRegs = do
     , regsNames = names
     }
 
+parseDeclHeader:: MonadIO m => String -> ParsecT String u m String
 parseDeclHeader str = do
   try $ reserved str
   widthMaybe <- optionMaybe $ brackets (many (noneOf "]"))
@@ -75,6 +82,7 @@ parseDeclHeader str = do
              Just x  -> "[" ++ x ++ "]"
              Nothing -> ""
 
+parseAssign:: MonadIO m => ParsecT String u m Stmt
 parseAssign = do
   try $ reserved "assign"
   expr <- manyTill anyChar semi

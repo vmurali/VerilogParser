@@ -3,7 +3,9 @@ module ParseInstance(parseInstance) where
 import Lexer
 import Text.Parsec
 import DataTypes
+import Control.Monad.Trans
 
+parseInstance:: MonadIO m => ParsecT String u m Stmt
 parseInstance = do
   typ <- identifier
   paramMaybe <- optionMaybe (do{reserved "#"; parens (many $ noneOf ")");})
@@ -20,6 +22,7 @@ parseInstance = do
     , instancePorts = ports
     }
 
+parseMatch:: MonadIO m => ParsecT String u m (String, String)
 parseMatch = do
   dot
   formalName <- identifier

@@ -13,7 +13,7 @@ verilogParser suffixFns = do
   args <- getArgs
   Options file outDir <- getOpts args
   contents <- readFile file
-  let parsed = runParser parseFile () file contents
+  parsed <- runParserT parseFile () file contents
   case (parsed) of
     Left err -> do
       hPutStrLn stderr $ show err
@@ -22,4 +22,3 @@ verilogParser suffixFns = do
      where
       prefix = outDir ++ "/" ++ (subRegex (mkRegex "\\.v$") file "")
       writeFiles = map (\(suffix, fn) -> writeFile (prefix ++ suffix) $ show (fn contents)) suffixFns
-

@@ -16,18 +16,19 @@ addTerminal terminalSet (Output _ name) = Set.insert name terminalSet
 addTerminal terminalSet (Instance _ _ _ ports) = foldl (\tSet (f, r) -> if r /= "" && r /= "CLK" && r /= "RST_N" then Set.insert r tSet else tSet) terminalSet ports
 addTerminal terminalSet _ = terminalSet
 
+parseCaseHeader = do
+  depList <- parens $ sepBy identifier (reserved "or")
+  reserved "begin"
+  reserved "case"
+  switch <- parens $ many (noneOf ")")
+  label1 <- manyTill anyChar colon
+  written <- identifier
+  return (written, depList)
+
 addDepends dependsMap (Case str) =
   Map.insert written depList dependsMap
  where
   Right (written, depList) = runParser parseCaseHeader () "" str
-  parseCaseHeader = do
-    depList <- parens $ sepBy identifier (reserved "or")
-    reserved "begin"
-    reserved "case"
-    switch <- parens $ many (noneOf ")")
-    label1 <- manyTill anyChar colon
-    written <- identifier
-    return (written, depList)
 
 addDepends dependsMap (Assign str) =
   Map.insert written depList dependsMap
