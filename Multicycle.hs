@@ -68,15 +68,18 @@ parseTaskStmtDepends = do
   optional $ lexeme (do{char '\"'; manyTill anyChar (char '\"')})
   option "" $ do{comma; many anyChar}
 
-mapTaskStmt terminalSet dependsMap (Task mayExpr stmt) = Task (Just (fromMaybe "1" mayExpr ++ concatMap (\x -> " && " ++ x ++ "_VALID") getTaskDepends)) stmt
+getTaskDepends terminalSet dependsMap (Task mayExpr stmt) = getTerminalDepends terminalSet dependsMap deps
  where
-  getTaskDepends = {- ["|" ++ stmtDeps ++ "|"] -} getTerminalDepends terminalSet dependsMap deps
   ifExpr = fromMaybe "" mayExpr
   Right stmtDeps = runParser parseTaskStmtDepends () "" stmt
   Right deps = runParser getIds () "" $ stmtDeps ++ " " ++ ifExpr
 
+mapTaskStmt terminalSet dependsMap x@(Task mayExpr stmt) = Task (Just (fromMaybe "1" mayExpr ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") (getTaskDepends terminalSet dependsMap x))) stmt
+
 mapTasks terminalSet dependsMap (TaskStmt xs) = TaskStmt $ map (mapTaskStmt terminalSet dependsMap) xs
 mapTasks _           _          x@_           = x
+
+addTaskDependsInfs terminalSet dependsMap infMap tasks = foldl (\newMap d -> Map.insertWith (++) d [] newMap) infMap $ concatMap (getTaskDepends terminalSet dependsMap) tasks
 
 addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ map (mapInstances . mapTasks terminalSet dependsMap) stmts ++ newValids ++ newConsumeds ++ validAssigns ++ consumedAssigns)
  where
@@ -84,8 +87,9 @@ addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ new
    dependsMap = foldl addDepends Map.empty stmts
    termDepsPartial = terminalDepends terminalSet dependsMap
    termDeps = termDepsPartial ++ [(write, [])| Output _ write <- stmts, Map.notMember write dependsMap]
-   termInfsPartialMap = terminalInfluences terminalSet dependsMap termDepsPartial
-   termInfs = (Map.assocs termInfsPartialMap) ++ [(read, [])| Input _ read <- stmts, Map.notMember read termInfsPartialMap, read /= "CLK" && read /= "RST_N"]
+   termInfsPartialMap1 = terminalInfluences terminalSet dependsMap termDepsPartial
+   termInfsPartialMap2 = foldl (addTaskDependsInfs terminalSet dependsMap) termInfsPartialMap1 [tasks| TaskStmt tasks <- stmts]
+   termInfs = (Map.assocs termInfsPartialMap2) ++ [(read, [])| Input _ read <- stmts, Map.notMember read termInfsPartialMap2, read /= "CLK" && read /= "RST_N"]
    ports = delete "CLK" $ delete "RST_N" allPorts
    newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ [x ++ "_CONSUMED" | x <- ports]
    newInputs = [Input "" (x ++ "_VALID")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"] ++ [Output "" (x ++ "_CONSUMED")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
