@@ -2,5 +2,5 @@
 
 for file in *.v
 do
-  ../../../Multicycle -o multi ${file}
+  Multicycle -o multi ${file}
 done

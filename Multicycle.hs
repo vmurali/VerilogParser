@@ -39,7 +39,7 @@ addDepends dependsMap _ = dependsMap
 
 getTerminalDepends terminalSet dependsMap [] = []
 getTerminalDepends terminalSet dependsMap (immDep:immDeps)
-  | Set.member immDep terminalSet = immDep:(getTerminalDepends terminalSet dependsMap immDeps)
+  | Set.member immDep terminalSet = nub $ immDep:(getTerminalDepends terminalSet dependsMap immDeps)
   | otherwise                     = getTerminalDepends terminalSet dependsMap $ nub ((fromMaybe [] $ Map.lookup immDep dependsMap) ++ immDeps)
 
 writeTerminalDepends terminalSet dependsMap (write, immDeps) =
