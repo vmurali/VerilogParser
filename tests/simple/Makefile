@@ -9,6 +9,8 @@
 	cd bsv && Convert.sh
 	ln -sf -t bsv/multi ${STRUCTURALSPEC_HOME}/lib/multi/*.v
 	cd bsv/multi && bsc -u -verilog -e mk$* *.v
+	ln -sf -t bsv ${STRUCTURALSPEC_HOME}/lib/single/*.v
+	cd bsv && bsc -u -verilog -e mk$* *.v
 
 clean:
 	rm -rf bsv a.out
