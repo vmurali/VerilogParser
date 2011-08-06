@@ -2,7 +2,7 @@ include Library;
 include RegFile;
 
 (* synthesize *)
-partition Empty mkRegisterFile;
+partition Empty mkTestRegFile;
   Reg#(Bit#(5)) x <- mkReg(0);
   RegFile#(1, 1, 32, Bit#(5)) rf <- mkRegFileU;
 
