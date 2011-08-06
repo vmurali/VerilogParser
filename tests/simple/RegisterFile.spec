@@ -2,19 +2,7 @@ include Library;
 include RegFile;
 
 (* synthesize *)
-partition Empty mkTest;
-  Reg#(Bit#(32)) x <- mkReg(24);
-  Reg#(Bit#(32)) y <- mkReg(45);
-
-  atomic a;
-    $display("%d %d", x, y);
-    x <= y;
-    y <= x;
-  endatomic
-endpartition
-
-(* synthesize *)
-partition Empty mkTest2;
+partition Empty mkRegisterFile;
   Reg#(Bit#(5)) x <- mkReg(0);
   RegFile#(1, 1, 32, Bit#(5)) rf <- mkRegFileU;
 
