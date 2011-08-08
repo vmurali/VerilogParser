@@ -9,7 +9,10 @@ import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
-getIds = sepEndBy identifier $ manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
+--getIds = sepEndBy identifier $ manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
+getIds = do{sep; sepEndBy identifier sep}
+ where
+  sep = manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
 
 addTerminal terminalSet (Input _ name) = if name /= "CLK" && name /= "RST_N" then Set.insert name terminalSet else terminalSet
 addTerminal terminalSet (Output _ name) = Set.insert name terminalSet
@@ -57,7 +60,7 @@ mapInstances inst@Instance{instancePorts = ports} = inst {instancePorts = ports 
                                                                           (map (printPort "_VALID" "")  nonClkRstPorts) ++
                                                                           (map (printPort "_CONSUMED" "1") nonClkRstPorts)}
  where
-  printPort suffix dflt (r, f) = (r ++ suffix, if f == "" then "" else f ++ suffix)
+  printPort suffix dflt (f, r) = (f ++ suffix, if r == "" then dflt else r ++ suffix)
   nonClkRstPorts = delete ("CLK", "CLK") $ delete ("RST_N", "RST_N") ports
 mapInstances x@_ = x
 
@@ -72,7 +75,7 @@ getTaskDepends terminalSet dependsMap (Task mayExpr stmt) = getTerminalDepends t
  where
   ifExpr = fromMaybe "" mayExpr
   Right stmtDeps = runParser parseTaskStmtDepends () "" stmt
-  Right deps = runParser getIds () "" $ stmtDeps ++ " " ++ ifExpr
+  Right deps = runParser getIds () "" $ stmtDeps ++ "|" ++ ifExpr
 
 mapTaskStmt terminalSet dependsMap x@(Task mayExpr stmt) = Task (Just (fromMaybe "1" mayExpr ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") (getTaskDepends terminalSet dependsMap x))) stmt
 
