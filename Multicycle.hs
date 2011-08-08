@@ -9,7 +9,6 @@ import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Map as Map
 
---getIds = sepEndBy identifier $ manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
 getIds = do{sep; sepEndBy identifier sep}
  where
   sep = manyTill ((char '\''>>anyChar) <|> anyChar) $ lookAhead ((try identifier>>return ()) <|> eof)
