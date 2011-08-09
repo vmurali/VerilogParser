@@ -57,7 +57,7 @@ terminalInfluences terminalSet dependsMap termDeps = foldl getInfluences Map.emp
 
 mapInstances inst@Instance{instancePorts = ports} = inst {instancePorts = ports ++
                                                                           (map (printPort "_VALID" "")  nonClkRstPorts) ++
-                                                                          (map (printPort "_CONSUMED" "1") nonClkRstPorts)}
+                                                                          (map (printPort "_CONSUMED" "1'b1") nonClkRstPorts)}
  where
   printPort suffix dflt (f, r) = (f ++ suffix, if r == "" then dflt else r ++ suffix)
   nonClkRstPorts = delete ("CLK", "CLK") $ delete ("RST_N", "RST_N") ports
@@ -76,7 +76,7 @@ getTaskDepends terminalSet dependsMap (Task mayExpr stmt) = getTerminalDepends t
   Right stmtDeps = runParser parseTaskStmtDepends () "" stmt
   Right deps = runParser getIds () "" $ stmtDeps ++ "|" ++ ifExpr
 
-mapTaskStmt terminalSet dependsMap x@(Task mayExpr stmt) = Task (Just (fromMaybe "1" mayExpr ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") (getTaskDepends terminalSet dependsMap x))) stmt
+mapTaskStmt terminalSet dependsMap x@(Task mayExpr stmt) = Task (Just (fromMaybe "1'b1" mayExpr ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") (getTaskDepends terminalSet dependsMap x))) stmt
 
 mapTasks terminalSet dependsMap (TaskStmt xs) = TaskStmt $ map (mapTaskStmt terminalSet dependsMap) xs
 mapTasks _           _          x@_           = x
@@ -96,7 +96,7 @@ addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ new
    newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ [x ++ "_CONSUMED" | x <- ports]
    newInputs = [Input "" (x ++ "_VALID")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"] ++ [Output "" (x ++ "_CONSUMED")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
    newOutputs = [Output "" (x ++ "_VALID")| (Output _ x) <- stmts] ++ [Input "" (x ++ "_CONSUMED")| (Output _ x) <- stmts]
-   mapControl ctrl list = map (\(ctrlHead, ctrlTail) -> Assign (ctrlHead ++ ctrl ++ " = 1" ++ (concatMap (\x -> " && " ++ x ++ ctrl) ctrlTail))) list
+   mapControl ctrl list = map (\(ctrlHead, ctrlTail) -> Assign (ctrlHead ++ ctrl ++ " = 1'b1" ++ (concatMap (\x -> " && " ++ x ++ ctrl) ctrlTail))) list
    newValids = map (\x -> Wires "" [x ++ "_VALID"]) (Set.elems terminalSet)
    newConsumeds = map (\x -> Wires "" [x ++ "_CONSUMED"]) (Set.elems terminalSet)
    validAssigns = mapControl "_VALID" termDeps
