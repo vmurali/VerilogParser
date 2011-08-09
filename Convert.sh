@@ -1,6 +1,9 @@
 #!/bin/bash
 
-for file in mk*.v
+for file in *.v
 do
-  Multicycle -o multi ${file}
+  if [[ ! ${file} == Base.v && ! ${file} == RegFile.v && ! ${file} == Rand.v ]]
+  then
+    Multicycle -o ../multi ${file}
+  fi
 done
