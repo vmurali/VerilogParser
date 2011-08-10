@@ -4,7 +4,7 @@
 	ghc --make -outputdir build$* $*hs
 
 clean:
-	rm -rf build *.o *.hi buildMulticycle. buildPartitioner. buildNormal. Multicycle Partitioner Normal
+	rm -rf build* Multiicycle Partitioner Normal
 
 all: Multicycle. Partitioner. Normal.
 
