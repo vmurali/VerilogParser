@@ -70,36 +70,45 @@ parseTaskStmtDepends = do
   optional $ lexeme (do{char '\"'; manyTill anyChar (char '\"')})
   option "" $ do{comma; many anyChar}
 
-getTaskDepends terminalSet dependsMap (Task mayExpr stmt) = getTerminalDepends terminalSet dependsMap $ nub deps
+taskImmDepends (Task mayExpr stmt) = nub deps
  where
   ifExpr = fromMaybe "" mayExpr
   Right stmtDeps = runParser parseTaskStmtDepends () "" stmt
   Right deps = runParser getIds () "" $ stmtDeps ++ "|" ++ ifExpr
 
-mapTaskStmt terminalSet dependsMap x@(Task mayExpr stmt) = Task (Just (fromMaybe "1'b1" mayExpr ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") (getTaskDepends terminalSet dependsMap x))) stmt
-
-mapTasks terminalSet dependsMap (TaskStmt xs) = TaskStmt $ map (mapTaskStmt terminalSet dependsMap) xs
-mapTasks _           _          x@_           = x
-
-addTaskDependsInfs terminalSet dependsMap infMap tasks = foldl (\newMap d -> Map.insertWith (\_ x -> x) d [] newMap) infMap $ concatMap (getTaskDepends terminalSet dependsMap) tasks
-
-addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ map (mapInstances . mapTasks terminalSet dependsMap) stmts ++ newValids ++ newConsumeds ++ validAssigns ++ consumedAssigns)
+addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ map mapInstances stmtsNonTask ++ newValids ++ newConsumeds ++ assignValids ++ assignConsumeds ++ newDoneWrites  ++ newDoneEnWrites ++ newDoneReads ++ newPiConsumeds ++ assignPiConsumeds ++ assignDoneWrites ++ assignDoneEnWrites ++ instDones ++ assignTasks ++ [TaskStmt newTaskStmts])
  where
-   terminalSet = foldl addTerminal Set.empty stmts
-   dependsMap = foldl addDepends Map.empty stmts
-   termDepsPartial = terminalDepends terminalSet dependsMap
-   termDeps = termDepsPartial ++ [(write, [])| Output _ write <- stmts, Map.notMember write dependsMap]
-   termInfsPartialMap1 = terminalInfluences terminalSet dependsMap termDepsPartial
-   termInfsPartialMap2 = foldl (addTaskDependsInfs terminalSet dependsMap) termInfsPartialMap1 [tasks| TaskStmt tasks <- stmts]
-   termInfs = (Map.assocs termInfsPartialMap2) ++ [(read, [])| Input _ read <- stmts, Map.notMember read termInfsPartialMap2, read /= "CLK" && read /= "RST_N"]
-   ports = delete "CLK" $ delete "RST_N" allPorts
-   newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ [x ++ "_CONSUMED" | x <- ports]
-   newInputs = [Input "" (x ++ "_VALID")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"] ++ [Output "" (x ++ "_CONSUMED")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
-   newOutputs = [Output "" (x ++ "_VALID")| (Output _ x) <- stmts] ++ [Input "" (x ++ "_CONSUMED")| (Output _ x) <- stmts]
-   mapControl ctrl list = map (\(ctrlHead, ctrlTail) -> Assign (ctrlHead ++ ctrl ++ " = 1'b1" ++ (concatMap (\x -> " && " ++ x ++ ctrl) ctrlTail))) list
-   newValids = map (\x -> Wires "" [x ++ "_VALID"]) (Set.elems terminalSet)
-   newConsumeds = map (\x -> Wires "" [x ++ "_CONSUMED"]) (Set.elems terminalSet)
-   validAssigns = mapControl "_VALID" termDeps
-   consumedAssigns = mapControl "_CONSUMED" termInfs
+  terminalSetPartial = foldl addTerminal Set.empty stmts
+  dependsMapPartial = foldl addDepends Map.empty stmts
+  taskStmts = concat [x| TaskStmt x <- stmts]
+  taskNames = ["TASK" ++ show n| n <- [1..(length taskStmts)]]
+  terminalSet = foldl (\set t -> Set.insert t set) terminalSetPartial taskNames
+  dependsMap = snd $ foldl (\(idx, map) t -> (idx + 1, Map.insert ("TASK" ++ show idx) (taskImmDepends t) map))  (1, dependsMapPartial) taskStmts
+  termDepsPartial = terminalDepends terminalSet dependsMap
+  termDeps = termDepsPartial ++ [(write, [])| Output _ write <- stmts, Map.notMember write dependsMap]
+  termInfsPartial = terminalInfluences terminalSet dependsMap termDepsPartial
+  termInfs = (Map.assocs termInfsPartial) ++ [(read, [])| Input _ read <- stmts, Map.notMember read termInfsPartial, read /= "CLK" && read /= "RST_N"]
+  ports = [x| x <- allPorts, x /= "CLK" && x /= "RST_N"]
+  newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ [x ++ "_CONSUMED" | x <- ports]
+  newInputs = [Input "" (x ++ "_VALID")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"] ++ [Output "" (x ++ "_CONSUMED")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
+  newOutputs = [Output "" (x ++ "_VALID")| (Output _ x) <- stmts] ++ [Input "" (x ++ "_CONSUMED")| (Output _ x) <- stmts]
+  newValids = [Wires "" [x ++ "_VALID"]| x <- Set.elems terminalSet]
+  newConsumeds = [Wires "" [x ++ "_CONSUMED"]| x <- Set.elems terminalSet]
+  assignValids = [Assign (write ++ "_VALID = " ++ write ++ "_DONE_READ? 1'b0: (1'b1" ++ (concatMap (\x -> " && " ++ x ++ "_VALID") deps) ++ ")")| (write, deps) <- termDeps]
+  assignConsumeds = [Assign (input ++ "_CONSUMED = 1'b1" ++ (concatMap (\x -> " && " ++ x ++ "_CONSUMED") infs))| (input, infs) <- termInfs]
+  terminalOutputs = [x| (x,_) <- termDeps]
+  newDoneWrites = [Wires "" [x ++ "_DONE_WRITE"]| x <- terminalOutputs]
+  newDoneEnWrites = [Wires "" [x ++ "_DONE_EN_WRITE"]| x <- terminalOutputs]
+  newDoneReads = [Wires "" [x ++ "_DONE_READ"]| x <- terminalOutputs]
+  newPiConsumeds = [Wires "" [x ++ "_PI_CONSUMED"]| x <- terminalOutputs]
+  assignPiConsumeds = [Assign $ x ++ "_PI_CONSUMED = 1'b1" ++ concatMap (\d -> " && " ++ d ++ "_CONSUMED") (x:y)| (x,y) <- termDeps]
+  assignDoneWrites = [Assign $ x ++ "_DONE_WRITE = " ++ x ++ "_PI_CONSUMED? 1'b0: " ++ x ++ "_CONSUMED"| x <- terminalOutputs]
+  assignDoneEnWrites = [Assign $ x ++ "_DONE_EN_WRITE = " ++ x ++ "_PI_CONSUMED | " ++ x ++ "_CONSUMED"| x <- terminalOutputs]
+  instDones = [Instance "mkRegNormal" "#(1'b1, 1'b0)" (x ++ "_DONE") [("CLK", "CLK"), ("RST_N", "RST_N"), ("IN_WRITE", x ++ "_DONE_WRITE"), ("IN_EN_WRITE", x ++ "_DONE_EN_WRITE"), ("OUT_READ", x ++ "_DONE_READ")]| x <- terminalOutputs]
+  isNonTask TaskStmt{} = False
+  isNonTask _          = True
+  stmtsNonTask = [x| x <- stmts, isNonTask x]
+  assignTasks = [Assign $ t ++ "_CONSUMED = " ++ t ++ "_VALID? 1'b1: " ++ t ++ "_DONE_READ" | t <- taskNames]
+  newTaskStmts = zipWith (\(Task mayExpr stmt) tName -> Task (Just $ fromMaybe "1'b1" mayExpr ++ " && " ++ tName ++ "_VALID") stmt) taskStmts taskNames
 
 main = verilogParser [("_multi.v", addControl)]
