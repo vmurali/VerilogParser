@@ -20,5 +20,5 @@ verilogParser suffixFns = do
       exitFailure
     Right contents -> foldl (>>) (return ()) writeFiles
      where
-      prefix = outDir ++ "/" ++ (subRegex (mkRegex "\\.v$") file "")
+      prefix = outDir ++ "/" ++ (subRegex (mkRegex "^.*\\/(.*)\\.v$") file "\\1")
       writeFiles = map (\(suffix, fn) -> writeFile (prefix ++ suffix) $ show (fn contents)) suffixFns
