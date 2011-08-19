@@ -44,12 +44,12 @@ getTerminalDepends terminalSet dependsMap (immDep:immDeps)
   | Set.member immDep terminalSet = nub $ immDep:(getTerminalDepends terminalSet dependsMap immDeps)
   | otherwise                     = getTerminalDepends terminalSet dependsMap $ nub ((fromMaybe [] $ Map.lookup immDep dependsMap) ++ immDeps)
 
-writeTerminalDepends terminalSet dependsMap (write, immDeps) =
-  (write, getTerminalDepends terminalSet dependsMap immDeps)
+writeTerminalDepends terminalSet dependsMap immDeps =
+  getTerminalDepends terminalSet dependsMap immDeps
 
-terminalDepends terminalSet dependsMap = map (writeTerminalDepends terminalSet dependsMap) writeImmDepends
+terminalDepends terminalSet dependsMap = Map.map (writeTerminalDepends terminalSet dependsMap) writeImmDepends
  where
-  writeImmDepends = [(write, nub deps)| (write, deps) <- Map.assocs dependsMap, Set.member write terminalSet]
+  writeImmDepends = Map.fromList [(write, nub deps)| (write, deps) <- Map.assocs dependsMap, Set.member write terminalSet]
 
 terminalInfluences terminalSet dependsMap termDeps = foldl getInfluences Map.empty termDeps
  where
@@ -76,7 +76,7 @@ taskImmDepends (Task mayExpr stmt) = nub deps
   Right stmtDeps = runParser parseTaskStmtDepends () "" stmt
   Right deps = runParser getIds () "" $ stmtDeps ++ "|" ++ ifExpr
 
-addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ map mapInstances stmtsNonTask ++ newValids ++ newConsumeds ++ assignValids ++ assignConsumeds ++ newDoneWrites  ++ newDoneEnWrites ++ newDoneReads ++ newPiConsumeds ++ assignPiConsumeds ++ assignDoneWrites ++ assignDoneEnWrites ++ instDones ++ assignTasks ++ [TaskStmt newTaskStmts])
+addControl (Module name allPorts stmts) = Module name newPorts (map mapInstances stmtsNonTask ++ newInputs ++ newOutputs ++ newValids ++ newConsumeds ++ assignValids ++ assignConsumeds ++ newDoneWrites  ++ newDoneEnWrites ++ newDoneReads ++ newPiConsumeds ++ assignPiConsumeds ++ assignDoneWrites ++ assignDoneEnWrites ++ instDones ++ assignTasks ++ [TaskStmt newTaskStmts])
  where
   terminalSetPartial = foldl addTerminal Set.empty stmts
   dependsMapPartial = foldl addDepends Map.empty stmts
@@ -85,8 +85,8 @@ addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ new
   terminalSet = foldl (\set t -> Set.insert t set) terminalSetPartial taskNames
   dependsMap = snd $ foldl (\(idx, map) t -> (idx + 1, Map.insert ("TASK" ++ show idx) (taskImmDepends t) map))  (1, dependsMapPartial) taskStmts
   termDepsPartial = terminalDepends terminalSet dependsMap
-  termDeps = termDepsPartial ++ [(write, [])| Output _ write <- stmts, Map.notMember write dependsMap]
-  termInfsPartial = terminalInfluences terminalSet dependsMap termDepsPartial
+  termDeps = foldl (\map x -> Map.insertWith (++) x [] map) termDepsPartial [write| Output _ write <- stmts]
+  termInfsPartial = terminalInfluences terminalSet dependsMap $ Map.toList termDeps
   termInfs = (Map.assocs termInfsPartial) ++ [(read, [])| Input _ read <- stmts, Map.notMember read termInfsPartial, read /= "CLK" && read /= "RST_N"]
   ports = [x| x <- allPorts, x /= "CLK" && x /= "RST_N"]
   newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ [x ++ "_CONSUMED" | x <- ports]
@@ -94,17 +94,20 @@ addControl (Module name allPorts stmts) = Module name newPorts (newInputs ++ new
   newOutputs = [Output "" (x ++ "_VALID")| (Output _ x) <- stmts] ++ [Input "" (x ++ "_CONSUMED")| (Output _ x) <- stmts]
   newValids = [Wires "" [x ++ "_VALID"]| x <- Set.elems terminalSet]
   newConsumeds = [Wires "" [x ++ "_CONSUMED"]| x <- Set.elems terminalSet]
-  assignValids = [Assign (write ++ "_VALID = " ++ write ++ "_DONE_READ? 1'b0: (1'b1" ++ (concatMap (\x -> " && " ++ x ++ "_VALID") deps) ++ ")")| (write, deps) <- termDeps]
-  assignConsumeds = [Assign (input ++ "_CONSUMED = 1'b1" ++ (concatMap (\x -> " && " ++ x ++ "_CONSUMED") infs))| (input, infs) <- termInfs]
-  terminalOutputs = [x| (x,_) <- termDeps]
-  newDoneWrites = [Wires "" [x ++ "_DONE_WRITE"]| x <- terminalOutputs]
-  newDoneEnWrites = [Wires "" [x ++ "_DONE_EN_WRITE"]| x <- terminalOutputs]
-  newDoneReads = [Wires "" [x ++ "_DONE_READ"]| x <- terminalOutputs]
-  newPiConsumeds = [Wires "" [x ++ "_PI_CONSUMED"]| x <- terminalOutputs]
-  assignPiConsumeds = [Assign $ x ++ "_PI_CONSUMED = 1'b1" ++ concatMap (\d -> " && " ++ d ++ "_CONSUMED") (x:y)| (x,y) <- termDeps]
-  assignDoneWrites = [Assign $ x ++ "_DONE_WRITE = " ++ x ++ "_PI_CONSUMED? 1'b0: " ++ x ++ "_CONSUMED"| x <- terminalOutputs]
-  assignDoneEnWrites = [Assign $ x ++ "_DONE_EN_WRITE = " ++ x ++ "_PI_CONSUMED | " ++ x ++ "_CONSUMED"| x <- terminalOutputs]
-  instDones = [Instance "mkRegNormal" "#(1'b1, 1'b0)" (x ++ "_DONE") [("CLK", "CLK"), ("RST_N", "RST_N"), ("IN_WRITE", x ++ "_DONE_WRITE"), ("IN_EN_WRITE", x ++ "_DONE_EN_WRITE"), ("OUT_READ", x ++ "_DONE_READ")]| x <- terminalOutputs]
+  assignValids = [Assign $ write ++ "_VALID = " ++ (if outputDepsHasFork deps then "!" ++ write ++ "_DONE_READ" else "1'b1") ++ concatMap (\x -> " && " ++ x ++ "_VALID") deps| (write, deps) <- Map.toList termDeps]
+  assignConsumeds = [Assign $ input ++ "_CONSUMED = 1'b1" ++ (concatMap (\x -> " && " ++ x ++ "_CONSUMED") infs)| (input, infs) <- termInfs]
+  terminalOutputForks = [x| (x,y) <- Map.toList termDeps, outputDepsHasFork y]
+  inputHasFork inp = length (Map.findWithDefault [] inp termInfsPartial) > 1
+  outputDepsHasFork outDeps = foldl (\prev inp -> prev == True || inputHasFork inp) False outDeps
+  outputHasFork out = outputDepsHasFork $ Map.findWithDefault [] out termDeps
+  newDoneWrites = [Wires "" [x ++ "_DONE_WRITE"]| x <- terminalOutputForks]
+  newDoneEnWrites = [Wires "" [x ++ "_DONE_EN_WRITE"]| x <- terminalOutputForks]
+  newDoneReads = [Wires "" [x ++ "_DONE_READ"]| x <- terminalOutputForks]
+  newPiConsumeds = [Wires "" [x ++ "_PI_CONSUMED"]| x <- terminalOutputForks]
+  assignPiConsumeds = [Assign $ x ++ "_PI_CONSUMED = 1'b1" ++ concatMap (\d -> " && " ++ d ++ "_CONSUMED") (x:y)| (x,y) <- Map.toList termDeps, outputDepsHasFork y]
+  assignDoneWrites = [Assign $ x ++ "_DONE_WRITE = !" ++ x ++ "_PI_CONSUMED && " ++ x ++ "_CONSUMED"| x <- terminalOutputForks]
+  assignDoneEnWrites = [Assign $ x ++ "_DONE_EN_WRITE = " ++ x ++ "_PI_CONSUMED | " ++ x ++ "_CONSUMED"| x <- terminalOutputForks]
+  instDones = [Instance "mkRegNormal" "#(1'b1, 1'b0)" (x ++ "_DONE") [("CLK", "CLK"), ("RST_N", "RST_N"), ("IN_WRITE", x ++ "_DONE_WRITE"), ("IN_EN_WRITE", x ++ "_DONE_EN_WRITE"), ("OUT_READ", x ++ "_DONE_READ")]| x <- terminalOutputForks]
   isNonTask TaskStmt{} = False
   isNonTask _          = True
   stmtsNonTask = [x| x <- stmts, isNonTask x]
