@@ -18,7 +18,10 @@ verilogParser suffixFns = do
     Left err -> do
       hPutStrLn stderr $ show err
       exitFailure
-    Right contents -> foldl (>>) (return ()) writeFiles
+    Right contents -> do
+      foldl (>>) (return ()) writeFiles
      where
-      prefix = outDir ++ "/" ++ (subRegex (mkRegex "^.*\\/(.*)\\.v$") file "\\1")
+      removeSlash = subRegex (mkRegex "^.*\\/") file ""
+      removeDotV = subRegex (mkRegex ".v$") removeSlash ""
+      prefix = outDir ++ "/" ++ removeDotV
       writeFiles = map (\(suffix, fn) -> writeFile (prefix ++ suffix) $ show (fn contents)) suffixFns
