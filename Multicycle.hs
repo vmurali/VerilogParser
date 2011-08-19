@@ -49,7 +49,7 @@ writeTerminalDepends terminalSet dependsMap immDeps =
 
 terminalDepends terminalSet dependsMap = Map.map (writeTerminalDepends terminalSet dependsMap) writeImmDepends
  where
-  writeImmDepends = Map.fromList [(write, nub deps)| (write, deps) <- Map.assocs dependsMap, Set.member write terminalSet]
+  writeImmDepends = Map.fromList [(write, nub deps)| (write, deps) <- Map.toList dependsMap, Set.member write terminalSet]
 
 terminalInfluences terminalSet dependsMap termDeps = foldl getInfluences Map.empty termDeps
  where
@@ -87,31 +87,31 @@ addControl (Module name allPorts stmts) = Module name newPorts (map mapInstances
   termDepsPartial = terminalDepends terminalSet dependsMap
   termDeps = foldl (\map x -> Map.insertWith (++) x [] map) termDepsPartial [write| Output _ write <- stmts]
   termInfsPartial = terminalInfluences terminalSet dependsMap $ Map.toList termDeps
-  termInfs = (Map.assocs termInfsPartial) ++ [(read, [])| Input _ read <- stmts, Map.notMember read termInfsPartial, read /= "CLK" && read /= "RST_N"]
+  termInfs = foldl (\map x -> Map.insertWith (++) x [] map) termInfsPartial [read| Input _ read <- stmts, read /= "CLK" && read /= "RST_N"]
   ports = [x| x <- allPorts, x /= "CLK" && x /= "RST_N"]
   newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ [x ++ "_CONSUMED" | x <- ports]
   newInputs = [Input "" (x ++ "_VALID")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"] ++ [Output "" (x ++ "_CONSUMED")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
   newOutputs = [Output "" (x ++ "_VALID")| (Output _ x) <- stmts] ++ [Input "" (x ++ "_CONSUMED")| (Output _ x) <- stmts]
   newValids = [Wires "" [x ++ "_VALID"]| x <- Set.elems terminalSet]
   newConsumeds = [Wires "" [x ++ "_CONSUMED"]| x <- Set.elems terminalSet]
-  assignValids = [Assign $ write ++ "_VALID = " ++ (if outputDepsHasFork deps then "!" ++ write ++ "_DONE_READ" else "1'b1") ++ concatMap (\x -> " && " ++ x ++ "_VALID") deps| (write, deps) <- Map.toList termDeps]
-  assignConsumeds = [Assign $ input ++ "_CONSUMED = 1'b1" ++ (concatMap (\x -> " && " ++ x ++ "_CONSUMED") infs)| (input, infs) <- termInfs]
-  terminalOutputForks = [x| (x,y) <- Map.toList termDeps, outputDepsHasFork y]
-  inputHasFork inp = length (Map.findWithDefault [] inp termInfsPartial) > 1
-  outputDepsHasFork outDeps = foldl (\prev inp -> prev == True || inputHasFork inp) False outDeps
-  outputHasFork out = outputDepsHasFork $ Map.findWithDefault [] out termDeps
-  newDoneWrites = [Wires "" [x ++ "_DONE_WRITE"]| x <- terminalOutputForks]
-  newDoneEnWrites = [Wires "" [x ++ "_DONE_EN_WRITE"]| x <- terminalOutputForks]
-  newDoneReads = [Wires "" [x ++ "_DONE_READ"]| x <- terminalOutputForks]
-  newPiConsumeds = [Wires "" [x ++ "_PI_CONSUMED"]| x <- terminalOutputForks]
-  assignPiConsumeds = [Assign $ x ++ "_PI_CONSUMED = 1'b1" ++ concatMap (\d -> " && " ++ d ++ "_CONSUMED") (x:y)| (x,y) <- Map.toList termDeps, outputDepsHasFork y]
-  assignDoneWrites = [Assign $ x ++ "_DONE_WRITE = !" ++ x ++ "_PI_CONSUMED && " ++ x ++ "_CONSUMED"| x <- terminalOutputForks]
-  assignDoneEnWrites = [Assign $ x ++ "_DONE_EN_WRITE = " ++ x ++ "_PI_CONSUMED | " ++ x ++ "_CONSUMED"| x <- terminalOutputForks]
-  instDones = [Instance "mkRegNormal" "#(1'b1, 1'b0)" (x ++ "_DONE") [("CLK", "CLK"), ("RST_N", "RST_N"), ("IN_WRITE", x ++ "_DONE_WRITE"), ("IN_EN_WRITE", x ++ "_DONE_EN_WRITE"), ("OUT_READ", x ++ "_DONE_READ")]| x <- terminalOutputForks]
+  assignValids = [Assign $ write ++ "_VALID = " ++ (if outputDepsHasFanout deps then "!" ++ write ++ "_DONE_READ" else "1'b1") ++ concatMap (\x -> " && " ++ x ++ "_VALID") deps| (write, deps) <- Map.toList termDeps]
+  assignConsumeds = [Assign $ input ++ "_CONSUMED = 1'b1" ++ (concatMap (\x -> " && (" ++ (if outputHasFanout x then x ++ "_DONE_READ || " else "") ++ x ++ "_CONSUMED)") infs)| (input, infs) <- Map.toList termInfs]
+  terminalOutputFanouts = [x| (x,y) <- Map.toList termDeps, outputDepsHasFanout y]
+  inputHasFanout inp = length (Map.findWithDefault [] inp termInfs) > 1
+  outputDepsHasFanout outDeps = foldl (\prev inp -> prev == True || inputHasFanout inp) False outDeps
+  outputHasFanout out = outputDepsHasFanout $ Map.findWithDefault [] out termDeps
+  newDoneWrites = [Wires "" [x ++ "_DONE_WRITE"]| x <- terminalOutputFanouts]
+  newDoneEnWrites = [Wires "" [x ++ "_DONE_EN_WRITE"]| x <- terminalOutputFanouts]
+  newDoneReads = [Wires "" [x ++ "_DONE_READ"]| x <- terminalOutputFanouts]
+  newPiConsumeds = [Wires "" [x ++ "_PI_CONSUMED"]| x <- terminalOutputFanouts]
+  assignPiConsumeds = [Assign $ x ++ "_PI_CONSUMED = 1'b1" ++ concatMap (\d -> " && " ++ d ++ "_CONSUMED") y| (x,y) <- Map.toList termDeps, outputDepsHasFanout y]
+  assignDoneWrites = [Assign $ x ++ "_DONE_WRITE = !" ++ x ++ "_PI_CONSUMED"| x <- terminalOutputFanouts]
+  assignDoneEnWrites = [Assign $ x ++ "_DONE_EN_WRITE = " ++ x ++ "_PI_CONSUMED || " ++ x ++ "_CONSUMED"| x <- terminalOutputFanouts]
+  instDones = [Instance "mkRegNormal" "#(1'b1, 1'b0)" (x ++ "_DONE") [("CLK", "CLK"), ("RST_N", "RST_N"), ("IN_WRITE", x ++ "_DONE_WRITE"), ("IN_EN_WRITE", x ++ "_DONE_EN_WRITE"), ("OUT_READ", x ++ "_DONE_READ")]| x <- terminalOutputFanouts]
   isNonTask TaskStmt{} = False
   isNonTask _          = True
   stmtsNonTask = [x| x <- stmts, isNonTask x]
-  assignTasks = [Assign $ t ++ "_CONSUMED = " ++ t ++ "_VALID? 1'b1: " ++ t ++ "_DONE_READ" | t <- taskNames]
+  assignTasks = [Assign $ t ++ "_CONSUMED = " ++ t ++ "_VALID"| t <- taskNames]
   newTaskStmts = zipWith (\(Task mayExpr stmt) tName -> Task (Just $ fromMaybe "1'b1" mayExpr ++ " && " ++ tName ++ "_VALID") stmt) taskStmts taskNames
 
 main = verilogParser [("_multi.v", addControl)]
