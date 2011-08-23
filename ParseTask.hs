@@ -34,7 +34,15 @@ parseFirstIf = (optional . try) $ do
 parseIf:: MonadIO m => ParsecT String u m (Maybe String)
 parseIf = optionMaybe $ do
   try $ reserved "if"
-  parens $ many (noneOf ")")
+  parensBalanced False
+ where
+  allChar = manyTill anyChar $ (try . lookAhead . oneOf) "()"
+  parensBalanced inner = do
+    lexeme $ char '('
+    firsts <- allChar
+    mids <- many $ do{x <- parensBalanced True; y <- allChar; return $ x ++ y;}
+    lexeme $ char ')'
+    return $ (if inner then "(" else "") ++ firsts ++ concat mids ++ (if inner then ")" else "")
 
 parseRealTask:: MonadIO m => ParsecT String u m Task
 parseRealTask = do
