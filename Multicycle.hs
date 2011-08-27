@@ -92,11 +92,15 @@ fifoAllExposed _ (Module name allPorts stmts) = Module name newPorts (newInputs 
   newPorts = allPorts ++
              [x ++ "_ENQ"| x <- inputs] ++ [x ++ "_NOT_FULL"| x <- inputs] ++ [x ++ "_CONSUMED_BEFORE"| x <- inputs] ++ [x ++ "_RESET"| x <- inputs] ++ [x ++ "_CONSUMED"| x <- inputs] ++
              [x ++ "_NOT_EMPTY"| x <- outputs] ++ [x ++ "_DEQ"| x <- outputs]
-  newInputs = [x| x@Input{} <- stmts] ++ [Input "" (x ++ "_ENQ")| x <- inputs] ++ [Input "" (x ++ "_RESET")| x <- inputs] ++ [Input "" (x ++ "_DEQ")| x <- inputs]
+  newInputs = [x| x@Input{} <- stmts] ++ [Input "" (x ++ "_ENQ")| x <- inputs] ++ [Input "" (x ++ "_RESET")| x <- inputs] ++ [Input "" (x ++ "_DEQ")| x <- outputs]
   newOutputs = [x| x@Output{} <- stmts] ++ [Output "" (x ++ "_NOT_FULL")| x <- inputs] ++ [Output "" (x ++ "_CONSUMED_BEFORE")| x <- inputs] ++ [Output "" (x ++ "_CONSUMED")| x <- inputs] ++
                [Output "" (x ++ "_NOT_EMPTY")| x <- outputs]
-  newInputFifoWires = [Wires "" [x ++ "_NOT_EMPTY", x ++ "_VALUE", x ++ "_DEQ"]| x <- inputs]
-  newOutputFifoWires = [Wires "" [x ++ "_ENQ", x ++ "_VALUE", x ++ "_NOT_FULL", x ++ "_CONSUMED_BEFORE", x ++ "_RESET", x ++ "_CONSUMED"]| x <- outputs]
+  newInputFifoBoolWires = [Wires "" [x ++ "_NOT_EMPTY", x ++ "_DEQ"]| x <- inputs]
+  newInputFifoValWires = [Wires width [x ++ "_VALUE"]| Input width x <- stmts, x /= "CLK", x /= "RST_N"]
+  newInputFifoWires = newInputFifoBoolWires ++ newInputFifoValWires;
+  newOutputFifoBoolWires = [Wires "" [x ++ "_ENQ", x ++ "_NOT_FULL", x ++ "_CONSUMED_BEFORE", x ++ "_RESET", x ++ "_CONSUMED"]| x <- outputs]
+  newOutputFifoValWires = [Wires width [x ++ "_VALUE"]| Output width x <- stmts]
+  newOutputFifoWires = newOutputFifoBoolWires ++ newOutputFifoValWires
   newInputFifos = [Instance "BYPASS_FIFO" ("#(" ++ getWidth width ++ ")") (x ++ "_FIFO")
                             [dup "CLK", dup "RST_N",
                              ("ENQ", x ++ "_ENQ"), ("ENQ_VALUE", x), ("NOT_FULL", x ++ "_NOT_FULL"), ("CONSUMED_BEFORE", x ++ "_CONSUMED_BEFORE"),
@@ -109,16 +113,16 @@ fifoAllExposed _ (Module name allPorts stmts) = Module name newPorts (newInputs 
                               ("NOT_EMPTY", x ++ "_NOT_EMPTY"), ("DEQ_VALUE", x), ("DEQ", x ++ "_DEQ")]| Output width x <- stmts]
   newInst = [Instance (name ++ "_FIFO_INNER_NOT_EXPOSED") "" "INST"
                       ([dup "CLK", dup "RST_N"] ++
-                       [dup $ x ++ "_ENQ"| x <- inputs] ++
-                       [(x, x ++ "_VALUE")| x <- inputs] ++
-                       [dup $ x ++ "_NOT_FULL"| x <- inputs] ++
-                       [dup $ x ++ "_CONSUMED_BEFORE"| x <- inputs] ++
-                       [dup $ x ++ "_RESET"| x <- inputs] ++
-                       [dup $ x ++ "_CONSUMED"| x <- inputs] ++
-                       [dup $ x ++ "_NOT_EMPTY"| x <- outputs] ++
+                       [dup $ x ++ "_ENQ"| x <- outputs] ++
                        [(x, x ++ "_VALUE")| x <- outputs] ++
-                       [dup $ x ++ "_DEQ"| x <- outputs])]
-  getWidth width = if width == "" then "0" else head $ splitRegex (mkRegex ":") width
+                       [dup $ x ++ "_NOT_FULL"| x <- outputs] ++
+                       [dup $ x ++ "_CONSUMED_BEFORE"| x <- outputs] ++
+                       [dup $ x ++ "_RESET"| x <- outputs] ++
+                       [dup $ x ++ "_CONSUMED"| x <- outputs] ++
+                       [dup $ x ++ "_NOT_EMPTY"| x <- inputs] ++
+                       [(x, x ++ "_VALUE")| x <- inputs] ++
+                       [dup $ x ++ "_DEQ"| x <- inputs])]
+  getWidth width = if width == "" then "0" else (tail . head) $ splitRegex (mkRegex ":") width
 
 fifoInnerNotExposed _ (Module name allPorts stmts) = Module (name ++ "_FIFO_INNER_NOT_EXPOSED") newPorts
                                                             (newInputs ++ newOutputs ++ newValids ++ newWires ++ newEnqs ++ assignEnqs ++
@@ -138,13 +142,13 @@ fifoInnerNotExposed _ (Module name allPorts stmts) = Module (name ++ "_FIFO_INNE
   newWires = [Wires "" ["DONE", "RESET"]]
   newEnqs = [Wires "" [x ++ "_ENQ"]| x <- outputs]
   assignEnqs = [Assign $ x ++ "_ENQ = !" ++ x ++ "_NOT_FULL && !" ++ x ++ "_CONSUMED_BEFORE && " ++ x ++ "_VALID"| x <- outputs]
-  assignReset = [Assign $ "RESET = DONE" ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") outputs ++ concatMap (\x -> " && " ++ "_NOT_EMPTY") inputs]
+  assignReset = [Assign $ "RESET = DONE" ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") outputs ++ concatMap (\x -> " && " ++ x ++ "_NOT_EMPTY") inputs]
   assignOutputResets = [Assign $ x ++ "_RESET = RESET"| x <- outputs]
   assignInputDeqs = [Assign $ x ++ "_DEQ = RESET"| x <- inputs]
   newInst = [Instance (name ++ "_NO_FIFO") "" "INST"
                       ([dup x| x <- allPorts] ++
                        [(x ++ "_VALID", x ++ "_NOT_EMPTY")| x <- inputs] ++
-                       [(x ++ "_VALID", x ++ "_NOT_FULL")| x <- outputs] ++
+                       [(x ++ "_VALID", x ++ "_VALID")| x <- outputs] ++
                        [dup "DONE", dup "RESET"])]
 
 noFifoStmts refineds inst@(Instance t _ name ports) = inst { instanceType  = t ++ if elem t refineds then "_FIFO_OUTER_NOT_EXPOSED" else "_NO_FIFO"
