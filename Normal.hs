@@ -1,3 +1,3 @@
 import VerilogParser
 
-main = verilogParser [("_normal.v", id)]
+main = verilogParser [("_normal.v", \x -> id)]

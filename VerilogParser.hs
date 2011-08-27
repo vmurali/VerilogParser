@@ -11,7 +11,7 @@ import Text.Regex
 
 verilogParser suffixFns = do
   args <- getArgs
-  Options file outDir <- getOpts args
+  Options file outDir refineds <- getOpts args
   contents <- readFile file
   parsed <- runParserT parseFile () file contents
   case (parsed) of
@@ -24,4 +24,4 @@ verilogParser suffixFns = do
       removeSlash = subRegex (mkRegex "^.*\\/") file ""
       removeDotV = subRegex (mkRegex ".v$") removeSlash ""
       prefix = outDir ++ "/" ++ removeDotV
-      writeFiles = map (\(suffix, fn) -> writeFile (prefix ++ suffix) $ show (fn contents)) suffixFns
+      writeFiles = map (\(suffix, fn) -> writeFile (prefix ++ suffix) $ show (fn refineds contents)) suffixFns

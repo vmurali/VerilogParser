@@ -8,6 +8,7 @@ import Data.List
 import Data.Maybe
 import qualified Data.Set as Set
 import qualified Data.Map as Map
+import Text.Regex
 
 getIds = do{sep; sepEndBy identifier sep}
  where
@@ -51,67 +52,130 @@ terminalDepends terminalSet dependsMap = Map.map (writeTerminalDepends terminalS
  where
   writeImmDepends = Map.fromList [(write, nub deps)| (write, deps) <- Map.toList dependsMap, Set.member write terminalSet]
 
-terminalInfluences terminalSet dependsMap termDeps = foldl getInfluences Map.empty termDeps
- where
-  getInfluences influencesMap (write, deps) = foldl (\infMap dep -> Map.insertWith (++) dep [write] infMap) influencesMap deps
+getPorts allPorts = [x| x <- allPorts, x /= "CLK" && x /= "RST_N"]
+getInputs stmts = [x| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
+getOutputs stmts = [x| Output _ x <- stmts]
+dup x = (x, x)
 
-mapInstances inst@Instance{instancePorts = ports} = inst {instancePorts = ports ++
-                                                                          (map (printPort "_VALID" "")  nonClkRstPorts) ++
-                                                                          (map (printPort "_CONSUMED" "1'b1") nonClkRstPorts)}
+fifoOuterNotExposed _ mod@(Module name allPorts stmts) = Module (name ++ "_FIFO_OUTER_NOT_EXPOSED") newPorts
+                                                                (newInputs ++ newOutputs ++ newEnqs ++ newNotFulls ++ newConsumedBefores ++ newConsumeds ++ newNotEmptys ++
+                                                                assignEnqs ++ assignDone ++ newInst)
  where
-  printPort suffix dflt (f, r) = (f ++ suffix, if r == "" then dflt else r ++ suffix)
+  ports = getPorts allPorts
+  inputs = getInputs stmts
+  outputs = getOutputs stmts
+  newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ ["DONE", "RESET"]
+  newInputs = [x| x@Input{} <- stmts] ++ [Input "" (x ++ "_VALID")| x <- inputs] ++ [Input "" "RESET"]
+  newOutputs = [x| x@Output{} <- stmts] ++ [Output "" (x ++ "_VALID")| x <- outputs] ++ [Output "" "DONE"]
+  newEnqs = [Wires "" [x ++ "_ENQ"]| x <- inputs]
+  newNotFulls = [Wires "" [x ++ "_NOT_FULL"]| x <- inputs]
+  newConsumedBefores = [Wires "" [x ++ "_CONSUMED_BEFORE"]| x <- inputs]
+  newConsumeds = [Wires "" [x ++ "_CONSUMED"]| x <- inputs]
+  newNotEmptys = [Wires "" [x ++ "_NOT_EMPTY"]| x <- outputs]
+  assignEnqs = [Assign $ x ++ "_ENQ = !" ++ x ++ "_CONSUMED_BEFORE && !" ++ x ++ "_NOT_FULL && " ++ x ++ "_VALID"| x <- inputs]
+  assignDone = [Assign $ "DONE = 1'b1" ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") inputs ++ concatMap (\x -> " && " ++ x ++ "_NOT_EMPTY") outputs]
+  newInst = [Instance name "" "INST"
+                      ([dup x| x <- allPorts] ++
+                       [dup $ x ++ "_ENQ"| x <- inputs] ++
+                       [dup $ x ++ "_NOT_FULL"| x <- inputs] ++
+                       [dup $ x ++ "_CONSUMED_BEFORE"| x <- inputs] ++
+                       [dup $ x ++ "_CONSUMED"| x <- inputs] ++
+                       [(x ++ "_RESET", "RESET")| x <- inputs] ++
+                       [dup $ x ++ "_NOT_EMPTY"| x <- outputs] ++
+                       [(x ++ "_DEQ", "RESET")| x <- outputs])]
+
+fifoAllExposed _ (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ newInputFifoWires ++ newOutputFifoWires ++ newInputFifos ++ newOutputFifos ++ newInst)
+ where
+  ports = getPorts allPorts
+  inputs = getInputs stmts
+  outputs = getOutputs stmts
+  newPorts = allPorts ++
+             [x ++ "_ENQ"| x <- inputs] ++ [x ++ "_NOT_FULL"| x <- inputs] ++ [x ++ "_CONSUMED_BEFORE"| x <- inputs] ++ [x ++ "_RESET"| x <- inputs] ++ [x ++ "_CONSUMED"| x <- inputs] ++
+             [x ++ "_NOT_EMPTY"| x <- outputs] ++ [x ++ "_DEQ"| x <- outputs]
+  newInputs = [x| x@Input{} <- stmts] ++ [Input "" (x ++ "_ENQ")| x <- inputs] ++ [Input "" (x ++ "_RESET")| x <- inputs] ++ [Input "" (x ++ "_DEQ")| x <- inputs]
+  newOutputs = [x| x@Output{} <- stmts] ++ [Output "" (x ++ "_NOT_FULL")| x <- inputs] ++ [Output "" (x ++ "_CONSUMED_BEFORE")| x <- inputs] ++ [Output "" (x ++ "_CONSUMED")| x <- inputs] ++
+               [Output "" (x ++ "_NOT_EMPTY")| x <- outputs]
+  newInputFifoWires = [Wires "" [x ++ "_NOT_EMPTY", x ++ "_VALUE", x ++ "_DEQ"]| x <- inputs]
+  newOutputFifoWires = [Wires "" [x ++ "_ENQ", x ++ "_VALUE", x ++ "_NOT_FULL", x ++ "_CONSUMED_BEFORE", x ++ "_RESET", x ++ "_CONSUMED"]| x <- outputs]
+  newInputFifos = [Instance "BYPASS_FIFO" ("#(" ++ getWidth width ++ ")") (x ++ "_FIFO")
+                            [dup "CLK", dup "RST_N",
+                             ("ENQ", x ++ "_ENQ"), ("ENQ_VALUE", x), ("NOT_FULL", x ++ "_NOT_FULL"), ("CONSUMED_BEFORE", x ++ "_CONSUMED_BEFORE"),
+                             ("RESET", x ++ "_RESET"), ("CONSUMED", x ++ "_CONSUMED"),
+                             ("NOT_EMPTY", x ++ "_NOT_EMPTY"), ("DEQ_VALUE", x ++ "_VALUE"), ("DEQ", x ++ "_DEQ")]| Input width x <- stmts, x /= "CLK", x /= "RST_N"]
+  newOutputFifos = [Instance "BYPASS_FIFO" ("#(" ++ getWidth width ++ ")") (x ++ "_FIFO")
+                             [dup "CLK", dup "RST_N",
+                              ("ENQ", x ++ "_ENQ"), ("ENQ_VALUE", x ++ "_VALUE"), ("NOT_FULL", x ++ "_NOT_FULL"), ("CONSUMED_BEFORE", x ++ "_CONSUMED_BEFORE"),
+                              ("RESET", x ++ "_RESET"), ("CONSUMED", x ++ "_CONSUMED"),
+                              ("NOT_EMPTY", x ++ "_NOT_EMPTY"), ("DEQ_VALUE", x), ("DEQ", x ++ "_DEQ")]| Output width x <- stmts]
+  newInst = [Instance (name ++ "_FIFO_INNER_NOT_EXPOSED") "" "INST"
+                      ([dup "CLK", dup "RST_N"] ++
+                       [dup $ x ++ "_ENQ"| x <- inputs] ++
+                       [(x, x ++ "_VALUE")| x <- inputs] ++
+                       [dup $ x ++ "_NOT_FULL"| x <- inputs] ++
+                       [dup $ x ++ "_CONSUMED_BEFORE"| x <- inputs] ++
+                       [dup $ x ++ "_RESET"| x <- inputs] ++
+                       [dup $ x ++ "_CONSUMED"| x <- inputs] ++
+                       [dup $ x ++ "_NOT_EMPTY"| x <- outputs] ++
+                       [(x, x ++ "_VALUE")| x <- outputs] ++
+                       [dup $ x ++ "_DEQ"| x <- outputs])]
+  getWidth width = if width == "" then "0" else head $ splitRegex (mkRegex ":") width
+
+fifoInnerNotExposed _ (Module name allPorts stmts) = Module (name ++ "_FIFO_INNER_NOT_EXPOSED") newPorts
+                                                            (newInputs ++ newOutputs ++ newValids ++ newWires ++ newEnqs ++ assignEnqs ++
+                                                             assignReset ++ assignOutputResets ++ assignInputDeqs ++ newInst)
+ where
+  ports = getPorts allPorts
+  inputs = getInputs stmts
+  outputs = getOutputs stmts
+  newPorts = allPorts ++
+             [x ++ "_NOT_EMPTY"| x <- inputs] ++ [x ++ "_DEQ"| x <- inputs] ++
+             [x ++ "_ENQ"| x <- outputs] ++ [x ++ "_NOT_FULL"| x <- outputs] ++ [x ++ "_CONSUMED_BEFORE"| x <- outputs] ++ [x ++ "_RESET"| x <- outputs] ++ [x ++ "_CONSUMED"| x <- outputs]
+  newInputs = [x| x@Input{} <- stmts] ++ [Input "" (x ++ "_NOT_EMPTY")| x <- inputs] ++
+              [Input "" (x ++ "_NOT_FULL")| x <- outputs] ++ [Input "" (x ++ "_CONSUMED_BEFORE")| x <- outputs] ++ [Input "" (x ++ "_CONSUMED")| x <- outputs]
+  newOutputs = [x| x@Output{} <- stmts] ++ [Output "" (x ++ "_DEQ")| x <- inputs] ++
+               [Output "" (x ++ "_ENQ")| x <- outputs] ++ [Output "" (x ++ "_RESET")| x <- outputs]
+  newValids = [Wires "" [x ++ "_VALID"]| x <- ports]
+  newWires = [Wires "" ["DONE", "RESET"]]
+  newEnqs = [Wires "" [x ++ "_ENQ"]| x <- outputs]
+  assignEnqs = [Assign $ x ++ "_ENQ = !" ++ x ++ "_NOT_FULL && !" ++ x ++ "_CONSUMED_BEFORE && " ++ x ++ "_VALID"| x <- outputs]
+  assignReset = [Assign $ "RESET = DONE" ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") outputs ++ concatMap (\x -> " && " ++ "_NOT_EMPTY") inputs]
+  assignOutputResets = [Assign $ x ++ "_RESET = RESET"| x <- outputs]
+  assignInputDeqs = [Assign $ x ++ "_DEQ = RESET"| x <- inputs]
+  newInst = [Instance (name ++ "_NO_FIFO") "" "INST"
+                      ([dup x| x <- allPorts] ++
+                       [(x ++ "_VALID", x ++ "_NOT_EMPTY")| x <- inputs] ++
+                       [(x ++ "_VALID", x ++ "_NOT_FULL")| x <- outputs] ++
+                       [dup "DONE", dup "RESET"])]
+
+noFifoStmts refineds inst@(Instance t _ name ports) = inst { instanceType  = t ++ if elem t refineds then "_FIFO_OUTER_NOT_EXPOSED" else "_NO_FIFO"
+                                                           , instancePorts = ports ++
+                                                                             map printPort nonClkRstPorts ++
+                                                                             [("DONE", name ++ "_DONE"), ("RESET", "RESET")]}
+ where
+  printPort (f, r) = (f ++ "_VALID", if r == "" then "" else r ++ "_VALID")
   nonClkRstPorts = delete ("CLK", "CLK") $ delete ("RST_N", "RST_N") ports
-mapInstances x@_ = x
 
-parseTaskStmtDepends = do
-  lexeme $ char '$'
-  identifier
-  lexeme $ char '('
-  optional $ lexeme (do{char '\"'; manyTill anyChar (char '\"')})
-  option "" $ do{comma; many anyChar}
+noFifoStmts _ (TaskStmt xs) = TaskStmt $ map (\(Task mayExpr stmt) -> Task (Just $ "RESET && (" ++ fromMaybe "1'b1" mayExpr ++ ")") stmt) xs
 
-taskImmDepends (Task mayExpr stmt) = nub deps
+noFifoStmts _ x@_ = x
+
+noFifo refineds (Module name allPorts stmts) = Module (name ++ "_NO_FIFO") newPorts (map (noFifoStmts refineds) stmts ++ newInputs ++ newOutputs ++ newValids ++ newDones ++ assignValids ++ assignDone)
  where
-  ifExpr = fromMaybe "" mayExpr
-  Right stmtDeps = runParser parseTaskStmtDepends () "" stmt
-  Right deps = runParser getIds () "" $ stmtDeps ++ "|" ++ ifExpr
-
-addControl (Module name allPorts stmts) = Module name newPorts (map mapInstances stmtsNonTask ++ newInputs ++ newOutputs ++ newValids ++ newConsumeds ++ assignValids ++ assignConsumeds ++ newDoneWrites  ++ newDoneEnWrites ++ newDoneReads ++ newPiConsumeds ++ assignPiConsumeds ++ assignDoneWrites ++ assignDoneEnWrites ++ instDones ++ assignTasks ++ [TaskStmt newTaskStmts])
- where
-  terminalSetPartial = foldl addTerminal Set.empty stmts
-  dependsMapPartial = foldl addDepends Map.empty stmts
-  taskStmts = concat [x| TaskStmt x <- stmts]
-  taskNames = ["TASK" ++ show n| n <- [1..(length taskStmts)]]
-  terminalSet = foldl (\set t -> Set.insert t set) terminalSetPartial taskNames
-  dependsMap = snd $ foldl (\(idx, map) t -> (idx + 1, Map.insert ("TASK" ++ show idx) (taskImmDepends t) map))  (1, dependsMapPartial) taskStmts
-  termDepsPartial = terminalDepends terminalSet dependsMap
-  termDeps = foldl (\map x -> Map.insertWith (++) x [] map) termDepsPartial [write| Output _ write <- stmts]
-  termInfsPartial = terminalInfluences terminalSet dependsMap $ Map.toList termDeps
-  termInfs = foldl (\map x -> Map.insertWith (++) x [] map) termInfsPartial [read| Input _ read <- stmts, read /= "CLK" && read /= "RST_N"]
-  ports = [x| x <- allPorts, x /= "CLK" && x /= "RST_N"]
-  newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ [x ++ "_CONSUMED" | x <- ports]
-  newInputs = [Input "" (x ++ "_VALID")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"] ++ [Output "" (x ++ "_CONSUMED")| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
-  newOutputs = [Output "" (x ++ "_VALID")| (Output _ x) <- stmts] ++ [Input "" (x ++ "_CONSUMED")| (Output _ x) <- stmts]
+  ports = getPorts allPorts
+  inputs = getInputs stmts
+  outputs = getOutputs stmts
+  terminalSet = foldl addTerminal Set.empty stmts
+  dependsMap = foldl addDepends Map.empty stmts
+  termDeps = terminalDepends terminalSet dependsMap
+  newPorts = allPorts ++ [x ++ "_VALID"| x <- ports] ++ ["DONE", "RESET"]
+  newInputs = [Input "" (x ++ "_VALID")| x <- inputs] ++ [Input "" "RESET"]
+  newOutputs = [Output "" (x ++ "_VALID")| x <- outputs] ++ [Output "" "DONE"]
   newValids = [Wires "" [x ++ "_VALID"]| x <- Set.elems terminalSet]
-  newConsumeds = [Wires "" [x ++ "_CONSUMED"]| x <- Set.elems terminalSet]
-  assignValids = [Assign $ write ++ "_VALID = " ++ (if outputDepsHasFanout deps then "!" ++ write ++ "_DONE_READ" else "1'b1") ++ concatMap (\x -> " && " ++ x ++ "_VALID") deps| (write, deps) <- Map.toList termDeps]
-  assignConsumeds = [Assign $ input ++ "_CONSUMED = 1'b1" ++ (concatMap (\x -> " && (" ++ (if outputHasFanout x then x ++ "_DONE_READ || " else "") ++ x ++ "_CONSUMED)") infs)| (input, infs) <- Map.toList termInfs]
-  terminalOutputFanouts = [x| (x,y) <- Map.toList termDeps, outputDepsHasFanout y]
-  inputHasFanout inp = length (Map.findWithDefault [] inp termInfs) > 1
-  outputDepsHasFanout outDeps = foldl (\prev inp -> prev == True || inputHasFanout inp) False outDeps
-  outputHasFanout out = outputDepsHasFanout $ Map.findWithDefault [] out termDeps
-  newDoneWrites = [Wires "" [x ++ "_DONE_WRITE"]| x <- terminalOutputFanouts]
-  newDoneEnWrites = [Wires "" [x ++ "_DONE_EN_WRITE"]| x <- terminalOutputFanouts]
-  newDoneReads = [Wires "" [x ++ "_DONE_READ"]| x <- terminalOutputFanouts]
-  newPiConsumeds = [Wires "" [x ++ "_PI_CONSUMED"]| x <- terminalOutputFanouts]
-  assignPiConsumeds = [Assign $ x ++ "_PI_CONSUMED = 1'b1" ++ concatMap (\d -> " && " ++ d ++ "_CONSUMED") y| (x,y) <- Map.toList termDeps, outputDepsHasFanout y]
-  assignDoneWrites = [Assign $ x ++ "_DONE_WRITE = !" ++ x ++ "_PI_CONSUMED"| x <- terminalOutputFanouts]
-  assignDoneEnWrites = [Assign $ x ++ "_DONE_EN_WRITE = " ++ x ++ "_PI_CONSUMED || " ++ x ++ "_CONSUMED"| x <- terminalOutputFanouts]
-  instDones = [Instance "mkRegNormal" "#(1'b1, 1'b0)" (x ++ "_DONE") [("CLK", "CLK"), ("RST_N", "RST_N"), ("IN_WRITE", x ++ "_DONE_WRITE"), ("IN_EN_WRITE", x ++ "_DONE_EN_WRITE"), ("OUT_READ", x ++ "_DONE_READ")]| x <- terminalOutputFanouts]
-  isNonTask TaskStmt{} = False
-  isNonTask _          = True
-  stmtsNonTask = [x| x <- stmts, isNonTask x]
-  assignTasks = [Assign $ t ++ "_CONSUMED = " ++ t ++ "_VALID"| t <- taskNames]
-  newTaskStmts = zipWith (\(Task mayExpr stmt) tName -> Task (Just $ fromMaybe "1'b1" mayExpr ++ " && " ++ tName ++ "_VALID") stmt) taskStmts taskNames
+  newDones = [Wires "" [x ++ "_DONE"] | Instance{instanceName = x} <- stmts]
+  assignValids = [Assign $ write ++ "_VALID = 1'b1" ++ concatMap (\x -> " && " ++ x ++ "_VALID") deps| (write, deps) <- Map.toList termDeps]
+  assignDone = [Assign $ "DONE = 1'b1" ++ concatMap (\x -> " && " ++ x ++ "_DONE") [x|Instance{instanceName = x} <- stmts]]
 
-main = verilogParser [("_multi.v", addControl)]
+main = verilogParser [("_FIFO_OUTER_NOT_EXPOSED.v", fifoOuterNotExposed),
+                      ("_FIFO_ALL_EXPOSED.v", fifoAllExposed),
+                      ("_FIFO_INNER_NOT_EXPOSED.v", fifoInnerNotExposed),
+                      ("_NO_FIFO.v", noFifo)]

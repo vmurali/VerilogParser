@@ -27,7 +27,7 @@ getInstWireWidths mod = Set.fold mapWireWidth Map.empty $ getInstWires mod
                  (isJust $ matchRegex (mkRegex ".*READ_VALID$") wire) ||
                  (isJust $ matchRegex (mkRegex ".*WRITE_CONSUMED$") wire)
 
-getLogic mod@(Module name ports stmts) = Module
+getLogic _ mod@(Module name ports stmts) = Module
   { moduleName = name ++ "_logic_"
   , modulePorts = ports ++ (Map.keys $ getInstWireWidths mod)
   , moduleStmts = (map getDefn (Map.toList (getInstWireWidths mod))) ++ filter isInst stmts
@@ -38,7 +38,7 @@ getLogic mod@(Module name ports stmts) = Module
   isInst (Instance{}) = False
   isInst _            = True
 
-getOuter mod@(Module name ports stmts) = mod
+getOuter _ mod@(Module name ports stmts) = mod
   { moduleStmts = [x| x@Input{} <- stmts] ++
                   [x| x@Output{} <- stmts] ++
                   (map getDefn (Map.toList (getInstWireWidths mod))) ++
