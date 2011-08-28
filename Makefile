@@ -4,8 +4,8 @@
 	ghc --make -outputdir build$* $*hs
 
 clean:
-	rm -rf build* Multicycle ChangeName Partitioner Normal
+	rm -rf build* Multicycle Partitioner Normal
 
-all: Multicycle. ChangeName. Partitioner. Normal.
+all: Multicycle. Partitioner. Normal.
 
 .DEFAULT_GOAL := all

@@ -72,7 +72,7 @@ fifoOuterNotExposed _ mod@(Module name allPorts stmts) = Module (name ++ "_FIFO_
   newConsumedBefores = [Wires "" [x ++ "_CONSUMED_BEFORE"]| x <- inputs]
   newConsumeds = [Wires "" [x ++ "_CONSUMED"]| x <- inputs]
   newNotEmptys = [Wires "" [x ++ "_NOT_EMPTY"]| x <- outputs]
-  assignEnqs = [Assign $ x ++ "_ENQ = !" ++ x ++ "_CONSUMED_BEFORE && !" ++ x ++ "_NOT_FULL && " ++ x ++ "_VALID"| x <- inputs]
+  assignEnqs = [Assign $ x ++ "_ENQ = !" ++ x ++ "_CONSUMED_BEFORE && " ++ x ++ "_NOT_FULL && " ++ x ++ "_VALID"| x <- inputs]
   assignDone = [Assign $ "DONE = 1'b1" ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") inputs ++ concatMap (\x -> " && " ++ x ++ "_NOT_EMPTY") outputs]
   newInst = [Instance name "" "INST"
                       ([dup x| x <- allPorts] ++
@@ -141,7 +141,7 @@ fifoInnerNotExposed _ (Module name allPorts stmts) = Module (name ++ "_FIFO_INNE
   newValids = [Wires "" [x ++ "_VALID"]| x <- ports]
   newWires = [Wires "" ["DONE", "RESET"]]
   newEnqs = [Wires "" [x ++ "_ENQ"]| x <- outputs]
-  assignEnqs = [Assign $ x ++ "_ENQ = !" ++ x ++ "_NOT_FULL && !" ++ x ++ "_CONSUMED_BEFORE && " ++ x ++ "_VALID"| x <- outputs]
+  assignEnqs = [Assign $ x ++ "_ENQ = " ++ x ++ "_NOT_FULL && !" ++ x ++ "_CONSUMED_BEFORE && " ++ x ++ "_VALID"| x <- outputs]
   assignReset = [Assign $ "RESET = DONE" ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") outputs ++ concatMap (\x -> " && " ++ x ++ "_NOT_EMPTY") inputs]
   assignOutputResets = [Assign $ x ++ "_RESET = RESET"| x <- outputs]
   assignInputDeqs = [Assign $ x ++ "_DEQ = RESET"| x <- inputs]
