@@ -57,9 +57,12 @@ getInputs stmts = [x| Input _ x <- stmts, x /= "CLK" && x /= "RST_N"]
 getOutputs stmts = [x| Output _ x <- stmts]
 dup x = (x, x)
 
-fifoOuterNotExposed _ mod@(Module name allPorts stmts) = Module (name ++ "_FIFO_OUTER_NOT_EXPOSED") newPorts
-                                                                (newInputs ++ newOutputs ++ newEnqs ++ newNotFulls ++ newConsumedBefores ++ newConsumeds ++ newNotEmptys ++
-                                                                assignEnqs ++ assignDone ++ newInst)
+fifoOuterNotExposed refineds mod@(Module name allPorts stmts) =
+  Module (name ++ "_FIFO_OUTER_NOT_EXPOSED") newPorts
+         (if elem name refineds
+            then (newInputs ++ newOutputs ++ newEnqs ++ newNotFulls ++ newConsumedBefores ++ newConsumeds ++ newNotEmptys ++
+                  assignEnqs ++ assignDone ++ newInst)
+            else moduleStmts $ noFifo [] mod)
  where
   ports = getPorts allPorts
   inputs = getInputs stmts
@@ -151,19 +154,19 @@ fifoInnerNotExposed _ (Module name allPorts stmts) = Module (name ++ "_FIFO_INNE
                        [(x ++ "_VALID", x ++ "_VALID")| x <- outputs] ++
                        [dup "DONE", dup "RESET"])]
 
-noFifoStmts refineds inst@(Instance t _ name ports) = inst { instanceType  = t ++ if elem t refineds then "_FIFO_OUTER_NOT_EXPOSED" else "_NO_FIFO"
-                                                           , instancePorts = ports ++
-                                                                             map printPort nonClkRstPorts ++
-                                                                             [("DONE", name ++ "_DONE"), ("RESET", "RESET")]}
+noFifoStmts inst@(Instance t _ name ports) = inst { instanceType  = t ++ "_FIFO_OUTER_NOT_EXPOSED"
+                                                  , instancePorts = ports ++
+                                                                    map printPort nonClkRstPorts ++
+                                                                    [("DONE", name ++ "_DONE"), ("RESET", "RESET")]}
  where
   printPort (f, r) = (f ++ "_VALID", if r == "" then "" else r ++ "_VALID")
   nonClkRstPorts = delete ("CLK", "CLK") $ delete ("RST_N", "RST_N") ports
 
-noFifoStmts _ (TaskStmt xs) = TaskStmt $ map (\(Task mayExpr stmt) -> Task (Just $ "RESET && (" ++ fromMaybe "1'b1" mayExpr ++ ")") stmt) xs
+noFifoStmts (TaskStmt xs) = TaskStmt $ map (\(Task mayExpr stmt) -> Task (Just $ "RESET && (" ++ fromMaybe "1'b1" mayExpr ++ ")") stmt) xs
 
-noFifoStmts _ x@_ = x
+noFifoStmts x@_ = x
 
-noFifo refineds (Module name allPorts stmts) = Module (name ++ "_NO_FIFO") newPorts (map (noFifoStmts refineds) stmts ++ newInputs ++ newOutputs ++ newValids ++ newDones ++ assignValids ++ assignDone)
+noFifo _ (Module name allPorts stmts) = Module (name ++ "_NO_FIFO") newPorts (map noFifoStmts stmts ++ newInputs ++ newOutputs ++ newValids ++ newDones ++ assignValids ++ assignDone)
  where
   ports = getPorts allPorts
   inputs = getInputs stmts
