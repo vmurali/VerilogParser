@@ -60,7 +60,7 @@ dup x = (x, x)
 fifoOuterNotExposed refineds mod@(Module name allPorts stmts) =
   Module (name ++ "_FIFO_OUTER_NOT_EXPOSED") newPorts
          (if elem name refineds
-            then (newInputs ++ newOutputs ++ newEnqs ++ newNotFulls ++ newConsumedBefores ++ newConsumeds ++ newNotEmptys ++
+            then (newInputs ++ newOutputs ++ newEnqs ++ newNotFulls ++ newConsumedBefores ++ newConsumeds ++
                   assignEnqs ++ assignDone ++ newInst)
             else moduleStmts $ noFifo [] mod)
  where
@@ -74,9 +74,8 @@ fifoOuterNotExposed refineds mod@(Module name allPorts stmts) =
   newNotFulls = [Wires "" [x ++ "_NOT_FULL"]| x <- inputs]
   newConsumedBefores = [Wires "" [x ++ "_CONSUMED_BEFORE"]| x <- inputs]
   newConsumeds = [Wires "" [x ++ "_CONSUMED"]| x <- inputs]
-  newNotEmptys = [Wires "" [x ++ "_NOT_EMPTY"]| x <- outputs]
   assignEnqs = [Assign $ x ++ "_ENQ = !" ++ x ++ "_CONSUMED_BEFORE && " ++ x ++ "_NOT_FULL && " ++ x ++ "_VALID"| x <- inputs]
-  assignDone = [Assign $ "DONE = 1'b1" ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") inputs ++ concatMap (\x -> " && " ++ x ++ "_NOT_EMPTY") outputs]
+  assignDone = [Assign $ "DONE = 1'b1" ++ concatMap (\x -> " && " ++ x ++ "_CONSUMED") inputs ++ concatMap (\x -> " && " ++ x ++ "_VALID") outputs]
   newInst = [Instance name "" "INST"
                       ([dup x| x <- allPorts] ++
                        [dup $ x ++ "_ENQ"| x <- inputs] ++
@@ -84,7 +83,7 @@ fifoOuterNotExposed refineds mod@(Module name allPorts stmts) =
                        [dup $ x ++ "_CONSUMED_BEFORE"| x <- inputs] ++
                        [dup $ x ++ "_CONSUMED"| x <- inputs] ++
                        [(x ++ "_RESET", "RESET")| x <- inputs] ++
-                       [dup $ x ++ "_NOT_EMPTY"| x <- outputs] ++
+                       [(x ++ "_NOT_EMPTY", x ++ "_VALID")| x <- outputs] ++
                        [(x ++ "_DEQ", "RESET")| x <- outputs])]
 
 fifoAllExposed _ (Module name allPorts stmts) = Module name newPorts (newInputs ++ newOutputs ++ newInputFifoWires ++ newOutputFifoWires ++ newInputFifos ++ newOutputFifos ++ newInst)
