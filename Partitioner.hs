@@ -12,7 +12,7 @@ getInstWires mod = Set.difference (foldl instWires Set.empty insts) inOuts
   inputs = Set.fromList [x | Input _ x <- moduleStmts mod]
   outputs = Set.fromList [x | Output _ x <- moduleStmts mod]
   inOuts = Set.union inputs outputs
-  instWires wiresSet (Instance _ _ _ ports) = foldl (\wSet (_, w) -> Set.insert w wSet) wiresSet ports
+  instWires wiresSet (Instance _ _ _ ports) = foldl (\wSet (_, w) -> if w /= "" then Set.insert w wSet else wSet) wiresSet ports
 
 getWidths mod = foldl addWidth Map.empty (moduleStmts mod)
  where
