@@ -33,8 +33,8 @@ getLogic _ mod@(Module name ports stmts) = Module
   , moduleStmts = (map getDefn (Map.toList (getInstWireWidths mod))) ++ filter isInst stmts
   }
  where
-  getDefn (wire, (True, width)) = Output width wire
-  getDefn (wire, (False, width)) = Input width wire
+  getDefn (wire, (True, width)) = Input width wire
+  getDefn (wire, (False, width)) = Output width wire
   isInst (Instance{}) = False
   isInst _            = True
 
