@@ -47,5 +47,7 @@ parseIf = optionMaybe $ do
 parseRealTask:: MonadIO m => ParsecT String u m Task
 parseRealTask = do
   expr <- parseIf
+  (optional . try) $ reserved "begin"
   str <- lexeme $ manyTill1 anyChar (try $ string ";\n")
+  (optional . try) $ (do {reservedOp "#"; lexeme $ char '0'; semi; reserved "end"})
   return $ Task expr str
